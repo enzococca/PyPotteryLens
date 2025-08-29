@@ -849,7 +849,7 @@ class SecondStepConfig:
     """Configuration for second step processing"""
     pred_output_dir: Path
     model_path: Path = Path("models/model_classifier.pth")
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     processed_suffix: str = "_processed"
 
 class SecondStepProcessor:

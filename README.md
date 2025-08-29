@@ -25,7 +25,7 @@ As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop applic
 
 ## Installation
 
-### Quick Installation (Windows)
+### Quick Installation
 
 1. Download the releases ZIP and extract it in a folder of your choice.
 
@@ -35,7 +35,9 @@ As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop applic
 
 4. After the installation is complete, the program will be executed and the default browser will open the GUI.
 
-> ⚠️ **Important**: If you are encountering issues with the installation, remove the `venv` folder and run the `PyPotteryLens_WIN.bat` file again. This will create a new virtual environment and install all the dependencies from scratch. 
+> ⚠️ **Important**: If you are encountering issues with the installation, use the cleanup script:
+> - **Windows**: Remove the `venv` folder and run `PyPotteryLens_WIN.bat` again
+> - **Unix/macOS**: Run `sh cleanup.sh` then `sh PyPotteryLens_UNIX.sh` 
 
 
 #### UNIX (Linux, MacOS)
@@ -51,7 +53,14 @@ As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop applic
    ```
    This will install the required dependencies and start the application.
 
-> ⚠️ **Important**: If you are encountering issues with the installation, remove the `venv` folder and run the `PyPotteryLens_UNIX.sh` file again. This will create a new virtual environment and install all the dependencies from scratch. 
+> ⚠️ **Important**: If you are encountering issues with the installation, run the cleanup script:
+> ```bash
+> sh cleanup.sh
+> ```
+> Then reinstall by running:
+> ```bash
+> sh PyPotteryLens_UNIX.sh
+> ``` 
 
 ### Manual Way (Windows, Linux, MacOS)
 
@@ -61,7 +70,7 @@ As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop applic
 
 3. Install PyTorch
 
-   - For CPU support (recommended for most users):
+   - For CPU support:
    ```bash
    pip install torch torchvision torchaudio
    ```
@@ -297,6 +306,12 @@ Full list available in `requirements.txt`
 
 ## Version History
 
+- 0.1.4 (Current Development)
+   - Enhanced MPS detection for Apple Silicon Macs
+   - Fixed Python 3.13 compatibility issues
+   - Added cleanup script for easier troubleshooting
+   - Improved GPU detection in setup scripts
+
 - 0.1.3
    - Minor bug fixes
 
@@ -320,10 +335,21 @@ Full list available in `requirements.txt`
 - MacOS Sonoma 14
 - MacOS Sequoia 15.2
 
+## Hardware Support
+
+### GPU Acceleration
+PyPotteryLens supports multiple hardware acceleration options:
+- **NVIDIA GPUs**: CUDA support for NVIDIA graphics cards
+- **Apple Silicon**: MPS (Metal Performance Shaders) support for M1/M2/M3 Macs
+- **CPU**: Fallback for systems without GPU acceleration
+
+The application automatically detects and uses the best available option.
+
 ## Known Issues ⚠️
 
 - The brush tool in the annotation revision tool doesn't support transparency, making it difficult to see the original image through brush strokes. This feature is planned for a future update.
 - For older version of MacOS (<= Monterey 12.7.5), the last version of Pytorch supported is `2.2.2`. Please modify the `requirements.txt` file accordingly.
+- Python 3.13 compatibility: If using Python 3.13, ensure scikit-image version is 0.25.0 or higher.
 
 
 ## Contributors

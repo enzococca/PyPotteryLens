@@ -339,7 +339,9 @@ def train_model(model, train_loader, val_loader, num_epochs=5, device='cuda', sa
     )
     
     criterion = nn.BCEWithLogitsLoss()
-    scaler = torch.cuda.amp.GradScaler()
+    # Only use GradScaler for CUDA
+    use_amp = device.type == 'cuda'
+    scaler = torch.cuda.amp.GradScaler() if use_amp else None
     best_val_loss = float('inf')
     patience = 5
     patience_counter = 0
@@ -380,19 +382,30 @@ def train_model(model, train_loader, val_loader, num_epochs=5, device='cuda', sa
             images = images.to(device)
             targets = tuple(t.to(device) for t in targets)
             
-            with torch.cuda.amp.autocast():
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(images)
+                    loss = sum(criterion(output, target) 
+                              for output, target in zip(outputs, targets))
+                
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                
+                scaler.step(optimizer)
+                scaler.update()
+            else:
                 outputs = model(images)
                 loss = sum(criterion(output, target) 
                           for output, target in zip(outputs, targets))
+                
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
             
-            optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            
-            scaler.step(optimizer)
-            scaler.update()
             scheduler.step()
             
             train_loss += loss.item()
@@ -501,7 +514,7 @@ def train_model(model, train_loader, val_loader, num_epochs=5, device='cuda', sa
 
 def main():
     # Set device and enable deterministic training
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     

@@ -22,7 +22,7 @@ class YOLOFineTuner:
         self.epochs = config.get('epochs', 100)
         self.batch_size = config.get('batch_size', 8)
         self.image_size = config.get('image_size', 640)
-        self.device = config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = config.get('device', 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
         
         # Learning rate parameters
         self.initial_lr = config.get('initial_lr', 0.001)
