@@ -12,9 +12,9 @@
 
 </div>
 
-As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop application for archaeological pottery drawings recording. It provides a comprehensive suite of tools for processing, detecting, and analyzing pottery fragments from scanned documents.
+As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop application for archaeological pottery drawings recording. It provides a comprehensive suite of tools for processing, detecting, analyzing, and documenting pottery fragments from scanned documents with advanced features for professional archaeological research.
 
-## Features
+## Core Features
 
 - **PDF Processing**: Convert multi-page PDF documents to high-quality images
 - **Fragment Detection**: Computer vision model for automatic pottery drawings detection
@@ -22,6 +22,60 @@ As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop applic
 - **Tabular Data Management**: Add tabular data to the detected drawings
 - **Post Processing**: Automatic classification of pottery drawings for a standardized recording
 - **User-Friendly Interface**: Intuitive GUI built with Gradio
+
+## Advanced Features (v0.1.4)
+
+### 🎨 Image Processing & Enhancement
+- **Color Normalization**: Automatic color correction for dataset uniformity
+- **Auto White Balance**: Correct color casts in scanned documents
+- **Dark Mode**: Eye-friendly dark theme for extended use
+- **Comparison View**: Side-by-side pottery comparisons
+- **Overlay Tools**: Transparent overlays for detailed analysis
+
+### 🏛️ Archaeological Standards & Export
+- **CIDOC-CRM Export**: Export data following international archaeological standards
+  - RDF/XML format
+  - JSON-LD format
+  - Full ontology compliance
+- **GIS Integration**: 
+  - GeoJSON export for QGIS/ArcGIS
+  - Spatial data support
+  - Coordinate system compatibility
+
+### 💾 Database & Metadata Management
+- **SQLite Database**: Robust relational database replacing CSV files
+- **EXIF Preservation**: Maintain original image metadata
+- **Provenance Tracking**: Complete history of modifications
+- **Hierarchical Tagging**: Organized tag system for pottery classification
+- **Relationship Mapping**: Define connections between pottery items
+
+### 📊 Statistical Analysis & Visualization
+- **Interactive Dashboard**: Real-time statistical visualizations
+- **Morphometric Analysis**: 
+  - Automatic measurements (height, diameter, volume)
+  - Shape indices and ratios
+  - Curvature analysis
+- **Clustering Analysis**: Group similar pottery automatically
+- **Trend Analysis**: Identify typological evolution over time
+
+### 📄 Professional Reporting
+- **Multi-format Export**: PDF, DOCX, and Web (HTML)
+- **Multi-language Support**: English, Italian, Spanish
+- **Customizable Templates**: Standard, Academic, Museum Catalog
+- **Automatic Bibliography**: Chicago and APA citation styles
+- **Web Publishing**: Generate static websites for online documentation
+
+### 🌐 API & Integration
+- **REST API**: Full CRUD operations for external system integration
+- **Batch Processing**: Process entire collections in background
+- **Asynchronous Operations**: Non-blocking batch tasks
+- **CORS Support**: Cross-origin resource sharing enabled
+
+### ⚡ Performance Optimization
+- **Smart Caching**: Intelligent result caching system
+- **Parallel Processing**: Multi-core CPU utilization
+- **GPU Acceleration**: Support for CUDA and MPS (Apple Silicon)
+- **Memory Management**: Optimized for large datasets
 
 ## Installation
 
@@ -290,27 +344,102 @@ The final step is exporting your results, which you can initiate by clicking the
 <img src="imgs/tutorial_gif/gif_5.gif" width="600"/>
 </p>
 
+### 6. Advanced Features (New!)
+
+The "Advanced Features" tab provides professional tools for archaeological research:
+
+#### 🎨 **Color Correction**
+- Normalize colors across your entire dataset
+- Auto white balance and histogram equalization
+- Preview corrections before applying
+
+#### 🔍 **Comparison View**
+- Compare multiple pottery items side-by-side
+- Choose horizontal or vertical layouts
+- Add labels for easy identification
+
+#### 🗺️ **GIS Export**
+- Export to GeoJSON for QGIS/ArcGIS integration
+- Include full metadata and measurements
+- Support for spatial analysis workflows
+
+#### 🏛️ **CIDOC-CRM Export**
+- Export following international archaeological standards
+- Choose between RDF/XML and JSON-LD formats
+- Include morphometric measurements and context
+
+#### 🏷️ **Metadata Management**
+- Add hierarchical tags (typology, decoration, condition)
+- Define relationships between pottery items
+- Track complete provenance history
+
+#### 📊 **Statistical Analysis**
+- Generate comprehensive dashboards
+- Automatic morphometric measurements
+- Clustering analysis to group similar items
+- Export publication-ready visualizations
+
+#### 📄 **Multi-format Reports**
+- Generate reports in PDF, DOCX, or HTML
+- Support for English, Italian, and Spanish
+- Include images, statistics, and bibliography
+- Professional templates for different uses
+
+### API Usage
+
+To enable REST API access to your data:
+
+```python
+# In a separate terminal after starting PyPotteryLens
+from api_reports import PotteryAPI
+api = PotteryAPI()
+api.run(host='0.0.0.0', port=5000)
+```
+
+API endpoints will be available at `http://localhost:5000/api/`
+
 ## Dependencies
 
-Key dependencies include:
+Core dependencies:
+- **gradio**: Web-based user interface
+- **torch**: Deep learning framework (with CUDA/MPS support)
+- **ultralytics**: YOLO object detection
+- **PyMuPDF**: PDF processing
+- **opencv-python**: Computer vision operations
 
-- gradio
-- torch
-- PyMuPDF
-- ultralytics
-- pandas
-- PIL
-- scikit-image
+Analysis & visualization:
+- **scikit-learn**: Machine learning and clustering
+- **scikit-image**: Image processing
+- **matplotlib** & **seaborn**: Statistical visualizations
+- **pandas**: Data manipulation
+
+Export & reporting:
+- **reportlab**: PDF generation
+- **python-docx**: DOCX generation
+- **flask** & **flask-restful**: REST API
+- **jinja2**: Template engine
 
 Full list available in `requirements.txt`
 
 ## Version History
 
 - 0.1.4 (Current Development)
+   - Added Advanced Features tab with professional archaeological tools
+   - Implemented CIDOC-CRM export for international standard compliance
+   - Added SQLite database replacing CSV files
+   - Integrated color normalization and image enhancement tools
+   - Added hierarchical metadata management with provenance tracking
+   - Implemented statistical analysis with morphometric measurements
+   - Added multi-format, multi-language report generation
+   - Created REST API for external system integration
+   - Added clustering analysis for pottery grouping
+   - Implemented GIS export (GeoJSON) for spatial analysis
    - Enhanced MPS detection for Apple Silicon Macs
    - Fixed Python 3.13 compatibility issues
+   - Added dark mode theme
+   - Added comparison view for side-by-side analysis
+   - Implemented smart caching for performance optimization
    - Added cleanup script for easier troubleshooting
-   - Improved GPU detection in setup scripts
 
 - 0.1.3
    - Minor bug fixes

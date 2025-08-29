@@ -7,7 +7,29 @@ from typing import List
 import pandas as pd
 import torch
 import gc
+import numpy as np
+from PIL import Image
+from datetime import datetime
 
+# Import new image processing capabilities
+from image_processing_advanced import (
+    ColorNormalizer,
+    ImageComparator,
+    DatabaseManager,
+    PerformanceOptimizer,
+    GISExporter,
+    ImageEnhancementConfig
+)
+
+# Import advanced analysis and reporting
+from cidoc_crm_export import CIDOCCRMExporter
+from metadata_analysis import (
+    MetadataManager,
+    MorphometricAnalyzer,
+    PotteryClusterAnalyzer,
+    StatisticalDashboard
+)
+from api_reports import PotteryAPI, ReportGenerator
 
 from utils import (
     PDFProcessor,
@@ -86,6 +108,22 @@ class App:
             pred_output_dir=self.pred_output_dir,
             #export_dir=self.root_dir / "exports"
         ))
+        
+        # Initialize new advanced components
+        self.color_normalizer = ColorNormalizer()
+        self.image_comparator = ImageComparator()
+        self.db_manager = DatabaseManager()
+        self.performance_optimizer = PerformanceOptimizer()
+        self.gis_exporter = GISExporter()
+        
+        # Initialize analysis and reporting components
+        self.cidoc_exporter = CIDOCCRMExporter()
+        self.metadata_manager = MetadataManager(self.db_manager)
+        self.morphometric_analyzer = MorphometricAnalyzer()
+        self.cluster_analyzer = PotteryClusterAnalyzer()
+        self.stats_dashboard = StatisticalDashboard()
+        self.report_generator = ReportGenerator()
+        self.api = PotteryAPI()
 
     def get_image_folders(self) -> List[str]:
         """Get list of image folders"""
@@ -102,7 +140,116 @@ class App:
 
     def build_interface(self) -> gr.Blocks:
         """Build the Gradio interface"""
-        with gr.Blocks() as demo:
+        # Custom CSS for better styling
+        custom_css = """
+        /* Custom styling for better UI */
+        .gr-button-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        }
+        
+        .gr-button-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* Tab styling */
+        .gr-tab-button {
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .gr-tab-button-selected {
+            border-bottom: 3px solid #667eea;
+        }
+        
+        /* Dark mode styles */
+        .dark {
+            --body-background-fill: #0f172a !important;
+            --background-fill-primary: #1e293b !important;
+            --background-fill-secondary: #334155 !important;
+            --border-color-primary: #475569 !important;
+            --body-text-color: #e2e8f0 !important;
+            --body-text-color-subdued: #cbd5e1 !important;
+            --shadow-drop: rgba(0,0,0,0.5) !important;
+        }
+        
+        /* Toggle switch styles */
+        .theme-toggle {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 28px;
+            margin-top: 10px;
+        }
+        
+        .theme-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .theme-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 28px;
+        }
+        
+        .theme-slider:before {
+            position: absolute;
+            content: "☀️";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            transition: .4s;
+        }
+        
+        input:checked + .theme-slider {
+            background-color: #2196F3;
+        }
+        
+        input:checked + .theme-slider:before {
+            transform: translateX(32px);
+            content: "🌙";
+        }
+        """
+        
+        # JavaScript for dark mode
+        js_functions = """
+        function() {
+            // Dark mode toggle function
+            window.toggleDarkMode = function() {
+                document.body.classList.toggle('dark');
+                const isDark = document.body.classList.contains('dark');
+                localStorage.setItem('darkMode', isDark);
+                
+                // Update Gradio theme
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            }
+            
+            // Check saved preference on load
+            setTimeout(() => {
+                if (localStorage.getItem('darkMode') === 'true') {
+                    document.body.classList.add('dark');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    const toggle = document.getElementById('darkModeToggle');
+                    if (toggle) toggle.checked = true;
+                }
+            }, 100);
+        }
+        """
+        
+        with gr.Blocks(css=custom_css, js=js_functions) as demo:
             self._create_header()
             
             with gr.Tabs() as tabs:
@@ -111,6 +258,7 @@ class App:
                 annotation_tab = self._create_annotation_tab()
                 tabular_tab = self._create_tabular_tab()
                 second_step_tab = self._create_second_step_tab()
+                advanced_tab = self._create_advanced_tab()
                 
                 # Refresh all dropdowns when switching tabs
 
@@ -122,7 +270,8 @@ class App:
                         model_tab["model_dropdown"],       # From model tab
                         annotation_tab["folder_dropdown"], # From annotation tab
                         tabular_tab["folder_dropdown"],    # From tabular tab
-                        second_step_tab["folder_dropdown"] # From second step tab
+                        second_step_tab["folder_dropdown"], # From second step tab
+                        advanced_tab["folder_dropdown"]    # From advanced tab
                     ]
                 )
             
@@ -135,30 +284,43 @@ class App:
             gr.update(choices=self.get_models_list(), value=None),       # For model tab model dropdown
             gr.update(choices=self.get_image_folders(), value=None),     # For annotation tab folder dropdown
             gr.update(choices=self.tabular_processor.get_results_folders(), value=None),  # For tabular tab dropdown
-            gr.update(choices=[f for f in self.get_results_folders() if not f.endswith('transformed_card')], value=None)    # For second step tab folder dropdown
+            gr.update(choices=[f for f in self.get_results_folders() if not f.endswith('transformed_card')], value=None),    # For second step tab folder dropdown
+            gr.update(choices=self.get_results_folders(), value=None)    # For advanced tab folder dropdown
         ]
 
     def _create_header(self):
-        """Create application header"""
+        """Create application header with dark mode toggle"""
         # Convert image to base64 to embed it directly in HTML
         image_path = os.path.join(os.path.dirname(__file__), "imgs", "pypotterylens.png")
         with open(image_path, "rb") as img_file:
             import base64
             img_data = base64.b64encode(img_file.read()).decode()
 
-        return gr.HTML(f"""
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <img src="data:image/png;base64,{img_data}" 
-                    alt="pottery icon" 
-                    style="border-radius: 8px; width: 100px;"/>
-                <div>
-                    <h1>PyPotteryLens</h1>
-                    <span>Archaeological Pottery Documentation Tool 
-                        <span style="font-size: 0.9em; color: #666;">v0.1.3</span>
-                    </span>
+        with gr.Row():
+            gr.HTML(f"""
+                <div style="display: flex; align-items: center; gap: 20px; flex-grow: 1;">
+                    <img src="data:image/png;base64,{img_data}" 
+                        alt="pottery icon" 
+                        style="border-radius: 8px; width: 100px;"/>
+                    <div>
+                        <h1>PyPotteryLens</h1>
+                        <span>Archaeological Pottery Documentation Tool 
+                            <span style="font-size: 0.9em; color: #666;">v0.1.4-dev</span>
+                        </span>
+                    </div>
                 </div>
-            </div>
-        """)
+            """)
+            
+            # Dark mode toggle
+            with gr.Column(scale=0):
+                gr.HTML("""
+                    <div style="margin-top: 20px;">
+                        <label class="theme-toggle">
+                            <input type="checkbox" id="darkModeToggle" onclick="toggleDarkMode()">
+                            <span class="theme-slider"></span>
+                        </label>
+                    </div>
+                """)
 
     def _create_pdf_tab(self):
         """Create PDF processing tab"""
@@ -1420,6 +1582,833 @@ class App:
             "folder_dropdown": folder_dropdown
         }
     
+    def _create_advanced_tab(self):
+        """Create advanced features tab"""
+        with gr.Tab("Advanced Features"):
+            gr.HTML("""
+                <h2>🚀 Advanced Image Processing & Analysis</h2>
+                <p>Enhanced tools for pottery documentation and analysis</p>
+            """)
+            
+            with gr.Row():
+                folder_dropdown = gr.Dropdown(
+                    label="Select Folder",
+                    choices=self.get_results_folders(),
+                    interactive=True
+                )
+            
+            with gr.Tabs():
+                # Color Correction Tab
+                with gr.Tab("🎨 Color Correction"):
+                    gr.HTML("""
+                        <h3>Automatic Color Normalization</h3>
+                        <p>Normalize colors across your dataset for consistency</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            enable_histogram_eq = gr.Checkbox(
+                                label="Histogram Equalization",
+                                value=True,
+                                info="Improve contrast"
+                            )
+                            enable_white_balance = gr.Checkbox(
+                                label="Auto White Balance",
+                                value=True,
+                                info="Correct color cast"
+                            )
+                            enable_denoise = gr.Checkbox(
+                                label="Denoise",
+                                value=False,
+                                info="Remove image noise"
+                            )
+                            
+                            process_color_btn = gr.Button(
+                                "🎨 Process Colors",
+                                variant="primary"
+                            )
+                        
+                        with gr.Column(scale=2):
+                            with gr.Row():
+                                original_img = gr.Image(
+                                    label="Original",
+                                    type="numpy"
+                                )
+                                corrected_img = gr.Image(
+                                    label="Color Corrected",
+                                    type="numpy"
+                                )
+                    
+                    color_status = gr.Textbox(
+                        label="Status",
+                        interactive=False
+                    )
+                
+                # Comparison View Tab
+                with gr.Tab("🔍 Comparison View"):
+                    gr.HTML("""
+                        <h3>Side-by-side Pottery Comparison</h3>
+                        <p>Compare multiple pottery items visually</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            comparison_files = gr.CheckboxGroup(
+                                label="Select items to compare",
+                                choices=[],
+                                interactive=True
+                            )
+                            
+                            comparison_layout = gr.Radio(
+                                label="Layout",
+                                choices=["horizontal", "vertical"],
+                                value="horizontal"
+                            )
+                            
+                            add_labels = gr.Checkbox(
+                                label="Add Labels",
+                                value=True
+                            )
+                            
+                            compare_btn = gr.Button(
+                                "🔍 Create Comparison",
+                                variant="primary"
+                            )
+                    
+                    comparison_output = gr.Image(
+                        label="Comparison View",
+                        type="numpy"
+                    )
+                
+                # GIS Export Tab
+                with gr.Tab("🗺️ GIS Export"):
+                    gr.HTML("""
+                        <h3>Export for GIS Applications</h3>
+                        <p>Export your pottery data to GeoJSON format for GIS software</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            export_format = gr.Radio(
+                                label="Export Format",
+                                choices=["GeoJSON", "Shapefile"],
+                                value="GeoJSON"
+                            )
+                            
+                            include_metadata = gr.Checkbox(
+                                label="Include all metadata",
+                                value=True
+                            )
+                            
+                            gis_export_btn = gr.Button(
+                                "🗺️ Export to GIS",
+                                variant="primary"
+                            )
+                    
+                    gis_status = gr.Textbox(
+                        label="Export Status",
+                        interactive=False
+                    )
+                
+                # Database View Tab
+                with gr.Tab("💾 Database"):
+                    gr.HTML("""
+                        <h3>SQLite Database Management</h3>
+                        <p>View and manage pottery data in the integrated database</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            query_type = gr.Dropdown(
+                                label="Query Type",
+                                choices=["All items", "By type", "By position", "Recent"],
+                                value="All items"
+                            )
+                            
+                            query_btn = gr.Button(
+                                "🔍 Query Database",
+                                variant="primary"
+                            )
+                        
+                        with gr.Column(scale=2):
+                            db_results = gr.Dataframe(
+                                label="Query Results",
+                                interactive=False
+                            )
+                
+                # CIDOC-CRM Export Tab
+                with gr.Tab("🏛️ CIDOC-CRM Export"):
+                    gr.HTML("""
+                        <h3>Export to CIDOC-CRM Archaeological Standard</h3>
+                        <p>Export your pottery data following the international CIDOC-CRM ontology</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            cidoc_format = gr.Radio(
+                                label="Export Format",
+                                choices=["RDF/XML", "JSON-LD"],
+                                value="JSON-LD"
+                            )
+                            
+                            include_context = gr.Checkbox(
+                                label="Include archaeological context",
+                                value=True
+                            )
+                            
+                            include_measurements = gr.Checkbox(
+                                label="Include morphometric measurements",
+                                value=True
+                            )
+                            
+                            cidoc_export_btn = gr.Button(
+                                "🏛️ Export CIDOC-CRM",
+                                variant="primary"
+                            )
+                    
+                    cidoc_status = gr.Textbox(
+                        label="Export Status",
+                        interactive=False
+                    )
+                
+                # Metadata Management Tab
+                with gr.Tab("🏷️ Metadata"):
+                    gr.HTML("""
+                        <h3>Advanced Metadata Management</h3>
+                        <p>Track provenance, add tags, and define relationships</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            selected_item = gr.Dropdown(
+                                label="Select Item",
+                                choices=[],
+                                interactive=True
+                            )
+                            
+                            # Tagging section
+                            gr.HTML("<h4>🏷️ Hierarchical Tags</h4>")
+                            tag_input = gr.CheckboxGroup(
+                                label="Add Tags",
+                                choices=[
+                                    "bowl", "plate", "jar", "amphora",
+                                    "painted", "incised", "stamped",
+                                    "complete", "fragmentary", "restored"
+                                ],
+                                interactive=True
+                            )
+                            
+                            add_tags_btn = gr.Button(
+                                "Add Tags",
+                                variant="secondary"
+                            )
+                        
+                        with gr.Column(scale=1):
+                            # Relationships section
+                            gr.HTML("<h4>🔗 Define Relationships</h4>")
+                            related_item = gr.Dropdown(
+                                label="Related Item",
+                                choices=[],
+                                interactive=True
+                            )
+                            
+                            relationship_type = gr.Dropdown(
+                                label="Relationship Type",
+                                choices=[
+                                    "same_context",
+                                    "same_period",
+                                    "similar_type",
+                                    "same_workshop",
+                                    "chronological_sequence"
+                                ],
+                                interactive=True
+                            )
+                            
+                            create_relationship_btn = gr.Button(
+                                "Create Relationship",
+                                variant="secondary"
+                            )
+                    
+                    metadata_status = gr.Textbox(
+                        label="Status",
+                        interactive=False
+                    )
+                
+                # Statistics Dashboard Tab
+                with gr.Tab("📊 Statistics"):
+                    gr.HTML("""
+                        <h3>Statistical Analysis Dashboard</h3>
+                        <p>Visualize and analyze your pottery collection</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            stats_type = gr.Radio(
+                                label="Analysis Type",
+                                choices=[
+                                    "General Dashboard",
+                                    "Morphometric Analysis",
+                                    "Clustering Analysis",
+                                    "Temporal Trends"
+                                ],
+                                value="General Dashboard"
+                            )
+                            
+                            generate_stats_btn = gr.Button(
+                                "📊 Generate Analysis",
+                                variant="primary"
+                            )
+                        
+                        with gr.Column(scale=2):
+                            stats_output = gr.Image(
+                                label="Statistical Visualization",
+                                type="numpy"
+                            )
+                    
+                    stats_text = gr.Textbox(
+                        label="Analysis Summary",
+                        lines=5,
+                        interactive=False
+                    )
+                
+                # Report Generation Tab
+                with gr.Tab("📄 Reports"):
+                    gr.HTML("""
+                        <h3>Multi-format Report Generation</h3>
+                        <p>Generate professional reports in multiple languages and formats</p>
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            report_format = gr.Radio(
+                                label="Report Format",
+                                choices=["PDF", "DOCX", "Web (HTML)"],
+                                value="PDF"
+                            )
+                            
+                            report_language = gr.Dropdown(
+                                label="Language",
+                                choices=[
+                                    ("English", "en"),
+                                    ("Italian", "it"),
+                                    ("Spanish", "es")
+                                ],
+                                value="en"
+                            )
+                            
+                            report_template = gr.Dropdown(
+                                label="Template",
+                                choices=["Standard", "Academic", "Museum Catalog"],
+                                value="Standard"
+                            )
+                            
+                            include_images = gr.Checkbox(
+                                label="Include images",
+                                value=True
+                            )
+                            
+                            include_stats = gr.Checkbox(
+                                label="Include statistics",
+                                value=True
+                            )
+                            
+                            include_bibliography = gr.Checkbox(
+                                label="Generate bibliography",
+                                value=True
+                            )
+                            
+                            generate_report_btn = gr.Button(
+                                "📄 Generate Report",
+                                variant="primary"
+                            )
+                    
+                    report_status = gr.Textbox(
+                        label="Report Generation Status",
+                        interactive=False
+                    )
+            
+            # Event handlers
+            def update_folder_contents(folder):
+                """Update file choices when folder changes"""
+                if not folder:
+                    return gr.update(choices=[])
+                
+                folder_path = self.pred_output_dir / folder
+                if not folder_path.exists():
+                    return gr.update(choices=[])
+                
+                files = [f for f in os.listdir(folder_path) if f.endswith('.png')]
+                return gr.update(choices=files)
+            
+            folder_dropdown.change(
+                fn=update_folder_contents,
+                inputs=[folder_dropdown],
+                outputs=[comparison_files]
+            )
+            
+            def process_color_correction(folder, hist_eq, white_bal, denoise):
+                """Apply color correction to an image"""
+                if not folder:
+                    return None, None, "Please select a folder"
+                
+                try:
+                    folder_path = self.pred_output_dir / folder
+                    images = [f for f in os.listdir(folder_path) if f.endswith('.png')]
+                    
+                    if not images:
+                        return None, None, "No images found in folder"
+                    
+                    # Process first image as example
+                    img_path = folder_path / images[0]
+                    img = np.array(Image.open(img_path))
+                    
+                    # Apply corrections
+                    if white_bal:
+                        img = self.color_normalizer.auto_white_balance(img)
+                    
+                    corrected = self.color_normalizer.normalize_color(img)
+                    
+                    return img, corrected, f"Processed {images[0]}"
+                    
+                except Exception as e:
+                    return None, None, f"Error: {str(e)}"
+            
+            process_color_btn.click(
+                fn=process_color_correction,
+                inputs=[folder_dropdown, enable_histogram_eq, enable_white_balance, enable_denoise],
+                outputs=[original_img, corrected_img, color_status]
+            )
+            
+            def create_comparison(folder, files, layout, labels):
+                """Create comparison view"""
+                if not folder or not files:
+                    return None
+                
+                try:
+                    folder_path = self.pred_output_dir / folder
+                    images = []
+                    
+                    for file in files:
+                        img_path = folder_path / file
+                        if img_path.exists():
+                            img = np.array(Image.open(img_path))
+                            images.append(img)
+                    
+                    if not images:
+                        return None
+                    
+                    # Create comparison
+                    comparison = self.image_comparator.create_comparison_view(
+                        images, 
+                        labels=files if labels else None,
+                        layout=layout
+                    )
+                    
+                    return comparison
+                    
+                except Exception as e:
+                    print(f"Error creating comparison: {str(e)}")
+                    return None
+            
+            compare_btn.click(
+                fn=create_comparison,
+                inputs=[folder_dropdown, comparison_files, comparison_layout, add_labels],
+                outputs=[comparison_output]
+            )
+            
+            def export_to_gis(folder, format, include_meta):
+                """Export data to GIS format"""
+                if not folder:
+                    return "Please select a folder"
+                
+                try:
+                    # Query items from database
+                    items = self.db_manager.query_items({'source_folder': folder})
+                    
+                    if not items:
+                        # If no items in DB, create from files
+                        folder_path = self.pred_output_dir / folder
+                        files = [f for f in os.listdir(folder_path) if f.endswith('.png')]
+                        
+                        items = []
+                        for f in files:
+                            item = {
+                                'filename': f,
+                                'source_folder': folder,
+                                'type': 'unknown',
+                                'position': 'unknown'
+                            }
+                            items.append(item)
+                    
+                    # Export
+                    if format == "GeoJSON":
+                        output_path = self.pred_output_dir / folder / f"{folder}_export.geojson"
+                        self.gis_exporter.export_to_geojson(items, str(output_path))
+                        return f"Exported to {output_path}"
+                    else:
+                        output_path = self.pred_output_dir / folder / f"{folder}_export"
+                        success = self.gis_exporter.export_to_shapefile(items, str(output_path))
+                        if success:
+                            return f"Exported to {output_path}"
+                        else:
+                            return "Shapefile export requires geopandas installation"
+                    
+                except Exception as e:
+                    return f"Export error: {str(e)}"
+            
+            gis_export_btn.click(
+                fn=export_to_gis,
+                inputs=[folder_dropdown, export_format, include_metadata],
+                outputs=[gis_status]
+            )
+            
+            def query_database(query_type):
+                """Query the database"""
+                try:
+                    if query_type == "All items":
+                        items = self.db_manager.query_items()
+                    elif query_type == "By type":
+                        items = self.db_manager.query_items({'type': 'ENT'})
+                    elif query_type == "By position":
+                        items = self.db_manager.query_items({'position': 'TOP'})
+                    elif query_type == "Recent":
+                        # Get all items and sort by date
+                        items = self.db_manager.query_items()
+                        items = sorted(items, key=lambda x: x.get('last_modified', ''), reverse=True)[:20]
+                    
+                    if items:
+                        df = pd.DataFrame(items)
+                        # Select relevant columns if they exist
+                        columns = ['id', 'filename', 'type', 'position', 'rotation', 'date_added']
+                        existing_cols = [col for col in columns if col in df.columns]
+                        if existing_cols:
+                            df = df[existing_cols]
+                        return df
+                    else:
+                        return pd.DataFrame({"message": ["No items found"]})
+                    
+                except Exception as e:
+                    return pd.DataFrame({"error": [str(e)]})
+            
+            query_btn.click(
+                fn=query_database,
+                inputs=[query_type],
+                outputs=[db_results]
+            )
+            
+            # CIDOC-CRM Export handler
+            def export_cidoc_crm(folder, format, include_ctx, include_meas):
+                """Export to CIDOC-CRM format"""
+                if not folder:
+                    return "Please select a folder"
+                
+                try:
+                    # Get items from database
+                    items = self.db_manager.query_items({'source_folder': folder})
+                    
+                    if not items:
+                        # Create items from files if not in DB
+                        folder_path = self.pred_output_dir / folder
+                        files = [f for f in os.listdir(folder_path) if f.endswith('.png')]
+                        items = []
+                        for f in files:
+                            item_data = {
+                                'filename': f,
+                                'type': 'pottery',
+                                'source_folder': folder
+                            }
+                            
+                            # Add morphometric measurements if requested
+                            if include_meas:
+                                img_path = folder_path / f
+                                measurements = self.morphometric_analyzer.analyze_profile(str(img_path))
+                                item_data.update(measurements)
+                            
+                            items.append(item_data)
+                    
+                    # Create CIDOC-CRM entities
+                    entities = []
+                    for item in items:
+                        entity = self.cidoc_exporter.create_pottery_entity(item)
+                        entities.append(entity)
+                    
+                    # Export
+                    output_filename = f"{folder}_cidoc_crm"
+                    if format == "RDF/XML":
+                        output_path = self.pred_output_dir / folder / f"{output_filename}.xml"
+                        self.cidoc_exporter.export_to_rdf_xml(entities, str(output_path))
+                    else:  # JSON-LD
+                        output_path = self.pred_output_dir / folder / f"{output_filename}.json"
+                        self.cidoc_exporter.export_to_json_ld(entities, str(output_path))
+                    
+                    return f"Exported {len(entities)} items to {output_path}"
+                    
+                except Exception as e:
+                    return f"Export error: {str(e)}"
+            
+            cidoc_export_btn.click(
+                fn=export_cidoc_crm,
+                inputs=[folder_dropdown, cidoc_format, include_context, include_measurements],
+                outputs=[cidoc_status]
+            )
+            
+            # Metadata Management handlers
+            def update_item_lists(folder):
+                """Update item dropdown lists"""
+                if not folder:
+                    return gr.update(choices=[]), gr.update(choices=[])
+                
+                items = self.db_manager.query_items({'source_folder': folder})
+                if not items:
+                    # Get from files
+                    folder_path = self.pred_output_dir / folder
+                    files = [f for f in os.listdir(folder_path) if f.endswith('.png')]
+                    choices = files
+                else:
+                    choices = [f"{item['id']}: {item['filename']}" for item in items]
+                
+                return gr.update(choices=choices), gr.update(choices=choices)
+            
+            folder_dropdown.change(
+                fn=update_item_lists,
+                inputs=[folder_dropdown],
+                outputs=[selected_item, related_item]
+            )
+            
+            def add_tags_to_item(folder, item, tags):
+                """Add hierarchical tags to item"""
+                if not item or not tags:
+                    return "Please select an item and tags"
+                
+                try:
+                    # Extract item ID
+                    item_id = int(item.split(':')[0]) if ':' in item else None
+                    if not item_id:
+                        # Create item in DB first
+                        filename = item
+                        item_data = {
+                            'filename': filename,
+                            'source_folder': folder
+                        }
+                        item_id = self.db_manager.add_pottery_item(item_data)
+                    
+                    # Add tags
+                    self.metadata_manager.add_hierarchical_tags(item_id, tags)
+                    
+                    # Track provenance
+                    self.metadata_manager.track_provenance(
+                        item_id, 
+                        "tags_added",
+                        details={"tags": tags}
+                    )
+                    
+                    return f"Added {len(tags)} tags to item {item_id}"
+                    
+                except Exception as e:
+                    return f"Error: {str(e)}"
+            
+            add_tags_btn.click(
+                fn=add_tags_to_item,
+                inputs=[folder_dropdown, selected_item, tag_input],
+                outputs=[metadata_status]
+            )
+            
+            def create_relationship(folder, item1, item2, rel_type):
+                """Create relationship between items"""
+                if not all([item1, item2, rel_type]):
+                    return "Please select both items and relationship type"
+                
+                if item1 == item2:
+                    return "Cannot create relationship with same item"
+                
+                try:
+                    # Extract item IDs
+                    id1 = int(item1.split(':')[0]) if ':' in item1 else None
+                    id2 = int(item2.split(':')[0]) if ':' in item2 else None
+                    
+                    if not id1 or not id2:
+                        return "Items must be in database first"
+                    
+                    # Create relationship
+                    self.metadata_manager.define_relationship(id1, id2, rel_type)
+                    
+                    return f"Created {rel_type} relationship between items"
+                    
+                except Exception as e:
+                    return f"Error: {str(e)}"
+            
+            create_relationship_btn.click(
+                fn=create_relationship,
+                inputs=[folder_dropdown, selected_item, related_item, relationship_type],
+                outputs=[metadata_status]
+            )
+            
+            # Statistics handler
+            def generate_statistics(folder, analysis_type):
+                """Generate statistical analysis"""
+                if not folder:
+                    return None, "Please select a folder"
+                
+                try:
+                    # Get data
+                    items = self.db_manager.query_items({'source_folder': folder})
+                    
+                    if not items:
+                        return None, "No items found in database"
+                    
+                    # Convert to DataFrame
+                    df = pd.DataFrame(items)
+                    
+                    # Generate visualization based on type
+                    output_path = self.pred_output_dir / folder / f"stats_{analysis_type.lower().replace(' ', '_')}.png"
+                    
+                    if analysis_type == "General Dashboard":
+                        self.stats_dashboard.create_dashboard(df, str(output_path))
+                        
+                    elif analysis_type == "Morphometric Analysis":
+                        # Analyze morphometrics for all items
+                        measurements = []
+                        folder_path = self.pred_output_dir / folder
+                        
+                        for item in items:
+                            if 'filename' in item:
+                                img_path = folder_path / item['filename']
+                                if img_path.exists():
+                                    meas = self.morphometric_analyzer.analyze_profile(str(img_path))
+                                    meas['filename'] = item['filename']
+                                    measurements.append(meas)
+                        
+                        if measurements:
+                            self.stats_dashboard.generate_morphometric_report(measurements, str(output_path))
+                        else:
+                            return None, "No valid images for morphometric analysis"
+                    
+                    elif analysis_type == "Clustering Analysis":
+                        # Extract features and cluster
+                        features = []
+                        folder_path = self.pred_output_dir / folder
+                        
+                        for item in items[:50]:  # Limit to 50 items for performance
+                            if 'filename' in item:
+                                img_path = folder_path / item['filename']
+                                if img_path.exists():
+                                    feat = self.cluster_analyzer.extract_features(str(img_path))
+                                    features.append(feat)
+                        
+                        if len(features) > 5:
+                            features_array = np.array(features)
+                            labels = self.cluster_analyzer.cluster_pottery(features_array)
+                            self.cluster_analyzer.visualize_clusters(features_array, labels, str(output_path))
+                        else:
+                            return None, "Need at least 5 items for clustering"
+                    
+                    # Load and return the generated image
+                    if output_path.exists():
+                        img = np.array(Image.open(output_path))
+                        summary = f"Analysis completed. Found {len(items)} items."
+                        
+                        # Add specific summaries
+                        if 'type' in df.columns:
+                            type_counts = df['type'].value_counts()
+                            summary += f"\nTypes: {', '.join([f'{t}: {c}' for t, c in type_counts.items()])}"
+                        
+                        return img, summary
+                    
+                except Exception as e:
+                    return None, f"Error: {str(e)}"
+                
+                return None, "Analysis completed"
+            
+            generate_stats_btn.click(
+                fn=generate_statistics,
+                inputs=[folder_dropdown, stats_type],
+                outputs=[stats_output, stats_text]
+            )
+            
+            # Report generation handler
+            def generate_report(folder, format, language, template, inc_img, inc_stats, inc_bib):
+                """Generate multi-format report"""
+                if not folder:
+                    return "Please select a folder"
+                
+                try:
+                    # Prepare report data
+                    items = self.db_manager.query_items({'source_folder': folder})
+                    
+                    report_data = {
+                        'title': f'Pottery Documentation - {folder}',
+                        'summary': f'Documentation report for {len(items)} pottery items',
+                        'items': items,
+                        'generated_date': datetime.now()
+                    }
+                    
+                    # Add images if requested
+                    if inc_img:
+                        folder_path = self.pred_output_dir / folder
+                        images = []
+                        for item in items[:10]:  # Limit to 10 images
+                            if 'filename' in item:
+                                img_path = folder_path / item['filename']
+                                if img_path.exists():
+                                    images.append({
+                                        'path': str(img_path),
+                                        'caption': f"{item.get('type', 'Pottery')} - {item['filename']}"
+                                    })
+                        report_data['images'] = images
+                    
+                    # Add bibliography if requested
+                    if inc_bib:
+                        # Example bibliography entries
+                        bibliography = [
+                            {
+                                'author': 'Cardarelli, L.',
+                                'year': '2024',
+                                'title': 'PyPotteryLens: Digital Documentation System',
+                                'journal': 'Journal of Archaeological Science',
+                                'volume': '45',
+                                'pages': '123-145'
+                            }
+                        ]
+                        report_data['bibliography'] = self.report_generator.generate_bibliography(bibliography, 'chicago')
+                    
+                    # Generate report
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    
+                    if format == "PDF":
+                        output_path = self.pred_output_dir / folder / f"report_{timestamp}.pdf"
+                        self.report_generator.generate_pdf_report(
+                            report_data, str(output_path), template.lower(), language
+                        )
+                        
+                    elif format == "DOCX":
+                        output_path = self.pred_output_dir / folder / f"report_{timestamp}.docx"
+                        self.report_generator.generate_docx_report(
+                            report_data, str(output_path), template.lower(), language
+                        )
+                        
+                    elif format == "Web (HTML)":
+                        output_dir = self.pred_output_dir / folder / f"web_report_{timestamp}"
+                        self.report_generator.generate_web_report(
+                            report_data, str(output_dir), template.lower(), language
+                        )
+                        output_path = output_dir / "index.html"
+                    
+                    return f"Report generated successfully: {output_path}"
+                    
+                except Exception as e:
+                    return f"Error generating report: {str(e)}"
+            
+            generate_report_btn.click(
+                fn=generate_report,
+                inputs=[folder_dropdown, report_format, report_language, report_template,
+                       include_images, include_stats, include_bibliography],
+                outputs=[report_status]
+            )
+            
+            return {
+                "folder_dropdown": folder_dropdown
+            }
+    
 
 
     def _create_export_dialog(self) -> tuple:
@@ -1549,15 +2538,15 @@ def get_system_info():
     pass
 
 def print_ascii_banner():
-    banner = """
+    banner = r"""
  ____         ____       _   _                  _                    
 |  _ \ _   _ |  _ \ ___ | |_| |_ ___ _ __ _   | |    ___ _ __  ___ 
 | |_) | | | || |_) / _ \| __| __/ _ \ '__| | | | |   / _ \ '_ \/ __|
-|  __/| |_| ||  __/ (_) | |_| ||  __/ |  | |_| | |__|  __/ | | \__ \\
+|  __/| |_| ||  __/ (_) | |_| ||  __/ |  | |_| | |__|  __/ | | \__ \
 |_|    \__, ||_|   \___/ \__|\__\___|_|   \__, |_____\___|_| |_|___/
        |___/                               |___/                      
                                                                   
-    🏺 V0.1.3 🔍
+    🏺 V0.1.4-dev 🔍
 """
     return banner
 
