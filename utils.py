@@ -6,7 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass
 import pandas as pd
 from PIL import Image
-import gradio as gr
+#import gradio as gr
 import fitz
 from ultralytics import YOLO
 from skimage.filters import threshold_otsu, median
@@ -112,6 +112,46 @@ class PDFProcessor:
         except Exception as e:
             return f"Error processing PDF: {str(e)}"
 
+    def process_pdf_to_folder(self, pdf_path: str, output_folder: str, split_pages: bool = False, project_name: str = None) -> str:
+        """
+        Convert PDF to images with optional page splitting, saving to specified folder
+        
+        Args:
+            pdf_path: Path to PDF file
+            output_folder: Destination folder for images
+            split_pages: If True, splits each page into left and right halves
+            project_name: Optional project name to use for image naming (defaults to PDF filename)
+        """
+        try:
+            # Use project name if provided, otherwise fall back to PDF filename
+            base_name = project_name if project_name else Path(pdf_path).stem
+            output_path = Path(output_folder)
+            os.makedirs(output_path, exist_ok=True)
+            
+            # Open PDF document
+            doc = fitz.open(pdf_path)
+            
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                
+                # Get the pixel map with a good resolution
+                pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                
+                # Convert to PIL Image
+                img_data = pix.samples
+                img = Image.frombytes("RGB", [pix.width, pix.height], img_data)
+                
+                if split_pages:
+                    self._process_split_page(img, base_name, page_num, output_path)
+                else:
+                    self._process_single_page(img, base_name, page_num, output_path)
+            
+            doc.close()
+            return f"PDF file {base_name} has been converted to JPG"
+            
+        except Exception as e:
+            return f"Error processing PDF: {str(e)}"
+
     def _process_single_page(self, image: Image.Image, pdf_name: str, page_num: int, output_folder: Path):
         """Save a single page as one image"""
         output_image_name = f'{pdf_name}_page_{page_num}.jpg'
@@ -143,14 +183,12 @@ class ModelProcessor:
                    confidence: float,
                    diagnostic: bool,
                    kernel_size: float,
-                   iterations: float) -> str:
+                   iterations: float,
+                   excluded_images: list = None) -> str:
         """Apply model to images in folder"""
         try:
             kernel_size = int(kernel_size)
             iterations = int(iterations)
-            
-            progress_tracker = gr.Progress()
-            progress_tracker(0, desc="Starting model application")
             
             if not folder or not model_name:
                 return "Please select both a folder and a model"
@@ -173,10 +211,26 @@ class ModelProcessor:
                 
             images = os.listdir(image_path)
             
+            # Filter out excluded images
+            if excluded_images:
+                # Extract just the filename from URLs like "/api/image/folder/filename.jpg"
+                excluded_filenames = set()
+                for url in excluded_images:
+                    filename = url.split('/')[-1]  # Get the last part of the URL
+                    excluded_filenames.add(filename)
+                
+                # Filter images list
+                original_count = len(images)
+                images = [img for img in images if img not in excluded_filenames]
+                excluded_count = original_count - len(images)
+                print(f"Excluded {excluded_count} images from processing")
+            
             if diagnostic:
                 images = images[:25]
-                
-            for image_file in progress_tracker.tqdm(images):
+            
+            total = len(images)
+            for idx, image_file in enumerate(images, 1):
+                print(f"Processing image {idx}/{total}: {image_file}")
                 self._process_single_image(
                     image_file,
                     image_path,
@@ -189,6 +243,79 @@ class ModelProcessor:
             
             return f"Model applied successfully to {folder} with confidence={confidence}, kernel={kernel_size}, iterations={iterations}"
         except Exception as e:
+            return f"Error applying model: {str(e)}"
+
+    def apply_model_to_project(self,
+                               images_path: str,
+                               masks_path: str,
+                               model_name: str,
+                               confidence: float,
+                               diagnostic: bool,
+                               kernel_size: int,
+                               iterations: int,
+                               excluded_images: list = None,
+                               progress_callback=None) -> str:
+        """Apply model to images in a project, saving masks to project folder"""
+        try:
+            images_path = Path(images_path)
+            masks_path = Path(masks_path)
+            
+            if not images_path.exists():
+                return f"Images folder not found: {images_path}"
+            
+            # Load model from models directory
+            model_path = self.config.models_dir / model_name
+            if not model_path.exists():
+                return f"Model not found: {model_name}"
+            
+            model = YOLO(model_path)
+            
+            # Setup output directory for masks
+            os.makedirs(masks_path, exist_ok=True)
+            
+            # Get all images
+            image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'}
+            images = [f.name for f in images_path.iterdir() 
+                     if f.is_file() and f.suffix.lower() in image_extensions]
+            
+            # Filter out excluded images
+            if excluded_images:
+                # Extract just the filename from URLs
+                excluded_filenames = set()
+                for url in excluded_images:
+                    filename = url.split('/')[-1]
+                    excluded_filenames.add(filename)
+                
+                original_count = len(images)
+                images = [img for img in images if img not in excluded_filenames]
+                excluded_count = original_count - len(images)
+                print(f"Excluded {excluded_count} images from processing")
+            
+            if diagnostic:
+                images = images[:25]
+            
+            total = len(images)
+            for idx, image_file in enumerate(images, 1):
+                print(f"Processing image {idx}/{total}: {image_file}")
+                
+                # Call progress callback if provided
+                if progress_callback:
+                    progress_callback(idx, total, f"Processing {image_file}")
+                
+                self._process_single_image(
+                    image_file,
+                    images_path,
+                    model,
+                    confidence,
+                    kernel_size,
+                    iterations,
+                    masks_path
+                )
+            
+            return f"Model applied successfully: {total} images processed with confidence={confidence}, kernel={kernel_size}, iterations={iterations}"
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return f"Error applying model: {str(e)}"
 
     def _process_single_image(self,
@@ -400,21 +527,23 @@ class MaskExtractor:
     def extract_masks(self, drop_folder_review: str) -> str:
         """Extract masks from images in folder"""
         try:
-            progress_tracker = gr.Progress()
-            progress_tracker(0, desc="Starting mask extraction")
-            
             # Setup directories
             img_folder, img_format, mask_folder, output_folder = self._setup_directories(drop_folder_review)
             
             metadata = []
             annotations = []
 
+            # Get list of files to process
+            mask_files = os.listdir(mask_folder)
+            total_files = len(mask_files)
+            
             # Process each mask file
-            for file in progress_tracker.tqdm(os.listdir(mask_folder)):
+            for idx, file in enumerate(mask_files, 1):
+                print(f"Processing mask {idx}/{total_files}: {file}")
+                
                 base_filename = file.split(".")[0].replace("_mask_layer", "")
                 
                 # Load images
-                #mask_array = np.array(Image.open(mask_folder / file).convert("L"))
                 mask_array = np.array(Image.open(mask_folder / file))
                 orig_array = np.array(Image.open(img_folder / f"{base_filename}.{img_format}"))
                 
@@ -449,6 +578,87 @@ class MaskExtractor:
 
         except Exception as e:
             print(f"Error in mask extraction: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return f"Error extracting masks: {str(e)}"
+
+    def extract_masks_from_project(self, masks_path: str, cards_path: str) -> str:
+        """Extract cards from masks in a project"""
+        try:
+            masks_path = Path(masks_path)
+            cards_path = Path(cards_path)
+            
+            if not masks_path.exists():
+                return "Masks folder not found"
+            
+            # Create cards folder
+            os.makedirs(cards_path, exist_ok=True)
+            
+            # Get all mask files
+            mask_files = [f.name for f in masks_path.iterdir() 
+                         if f.name.endswith('_mask_layer.png')]
+            
+            if not mask_files:
+                return "No mask files found. Apply a model first."
+            
+            metadata = []
+            annotations = []
+            
+            total_files = len(mask_files)
+            
+            # Process each mask file
+            for idx, file in enumerate(mask_files, 1):
+                print(f"Processing mask {idx}/{total_files}: {file}")
+                
+                base_filename = file.replace("_mask_layer.png", "")
+                
+                # Load mask
+                mask_array = np.array(Image.open(masks_path / file))
+                
+                # Try to find corresponding original image
+                # Look for image in parent's images folder
+                orig_image_path = masks_path.parent / 'images' / f"{base_filename}.jpg"
+                if not orig_image_path.exists():
+                    orig_image_path = masks_path.parent / 'images' / f"{base_filename}.png"
+                
+                if not orig_image_path.exists():
+                    print(f"Warning: Original image not found for {base_filename}")
+                    continue
+                
+                orig_array = np.array(Image.open(orig_image_path))
+                
+                # Process mask and get labeled regions
+                label_image = self._process_mask(mask_array)
+                total_area = mask_array.size
+                
+                # Process each region
+                for i, region in enumerate(regionprops(label_image)):
+                    result = self._extract_region(region, mask_array, orig_array, total_area)
+                    if result is None:
+                        continue
+                        
+                    cropped, bbox = result
+                    output_filename = f"{base_filename}_mask_layer_{i}.png"
+                    
+                    # Save cropped image with padding
+                    cropped = np.pad(cropped, ((50, 50), (50, 50), (0, 0)), mode='constant', constant_values=255)
+                    Image.fromarray(cropped).save(cards_path / output_filename)
+                    
+                    # Store metadata
+                    metadata.append((base_filename, f"{base_filename}_mask_layer_{i}"))
+                    annotations.append((bbox, output_filename))
+
+            # Save metadata
+            self._save_metadata(metadata, annotations, cards_path)
+            
+            if metadata:
+                return f"Successfully extracted {len(metadata)} cards from project masks"
+            return "No cards were extracted. Check if masks are properly drawn."
+
+        except Exception as e:
+            print(f"Error in mask extraction: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return f"Error extracting masks: {str(e)}"
     
 class AnnotationProcessor:

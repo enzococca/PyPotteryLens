@@ -177,3 +177,10 @@ release
 *.pt
 *.ai
 *.pdf
+
+projects
+
+.vscode/
+
+requirements_BK.txt
+TO_DO.txt
