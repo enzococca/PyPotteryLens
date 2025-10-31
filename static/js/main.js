@@ -324,9 +324,11 @@ function initializeModelInfoPopup() {
     if (!button || !popup) return;
 
     // Show popup when button is clicked
-    button.addEventListener('click', (e) => {
+    button.addEventListener('click', async (e) => {
         e.preventDefault();
         popup.classList.add('show');
+        // Load system info when popup opens
+        await loadSystemInfo();
     });
 
     // Hide popup when close button is clicked
@@ -349,6 +351,58 @@ function initializeModelInfoPopup() {
             popup.classList.remove('show');
         }
     });
+}
+
+// Load system information
+async function loadSystemInfo() {
+    const container = document.getElementById('system-info-container');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/api/system-info');
+        const data = await response.json();
+
+        if (response.ok) {
+            // Build HTML for system info
+            let html = '';
+
+            // CPU info
+            if (data.cpu) {
+                html += `<div class="model-info-item">
+                    <strong>CPU:</strong> ${data.cpu.cores} cores ${data.cpu.available ? '(Available)' : '(Not Available)'}
+                </div>`;
+            }
+
+            // GPU info
+            if (data.gpu) {
+                const gpuStatus = data.gpu.cuda_available ? 'Available' : 'Not Available';
+                html += `<div class="model-info-item">
+                    <strong>GPU (CUDA):</strong> ${gpuStatus}`;
+                if (data.gpu.cuda_available) {
+                    html += ` (${data.gpu.gpu_count} device${data.gpu.gpu_count !== 1 ? 's' : ''})`;
+                    if (data.gpu.gpu_names && data.gpu.gpu_names.length > 0) {
+                        html += `<br><small>${data.gpu.gpu_names.join(', ')}</small>`;
+                    }
+                }
+                html += '</div>';
+            }
+
+            // MPS info (for Apple Silicon)
+            if (data.mps) {
+                const mpsStatus = data.mps.mps_available ? 'Available' : 'Not Available';
+                html += `<div class="model-info-item">
+                    <strong>MPS (Apple Silicon):</strong> ${mpsStatus}
+                </div>`;
+            }
+
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div class="model-info-item"><em>Error loading system info</em></div>';
+        }
+    } catch (error) {
+        console.error('Error loading system info:', error);
+        container.innerHTML = '<div class="model-info-item"><em>Error loading system info</em></div>';
+    }
 }
 
 // Initialize model info popup after DOM is loaded

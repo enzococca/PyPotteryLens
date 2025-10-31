@@ -52,7 +52,7 @@ echo ====================================
 echo  Starting Flask Server
 echo ====================================
 echo.
-echo Open your browser at: http://localhost:5000
+echo Open your browser at: http://localhost:5001
 echo.
 echo Press Ctrl+C to stop the server
 echo.

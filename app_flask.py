@@ -298,10 +298,32 @@ def get_init_status():
     """Get initialization status"""
     return jsonify(init_status)
 
-@app.route('/api/operation-progress')
-def get_operation_progress():
-    """Get current operation progress for long-running tasks"""
-    return jsonify(operation_progress)
+@app.route('/api/system-info')
+def get_system_info():
+    """Get system information including CPU, GPU, and MPS availability"""
+    try:
+        import os
+        import torch
+        
+        system_info = {
+            'cpu': {
+                'cores': os.cpu_count() or 1,
+                'available': True
+            },
+            'gpu': {
+                'cuda_available': torch.cuda.is_available(),
+                'cuda_version': torch.version.cuda if torch.cuda.is_available() else None,
+                'gpu_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                'gpu_names': [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())] if torch.cuda.is_available() else []
+            },
+            'mps': {
+                'mps_available': torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+            }
+        }
+        
+        return jsonify(system_info)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
 def index():
@@ -2352,7 +2374,7 @@ if __name__ == '__main__':
     print(" 🏺 PyPotteryLens Flask Application 🔍")
     print("="*80)
     print("\n🚀 Starting server...")
-    print("📝 Browser will open at: http://localhost:5000")
+    print("📝 Browser will open at: http://localhost:5001")
     print("💡 Initialization will continue in background...")
     print("\n" + "="*80 + "\n")
     
@@ -2363,7 +2385,7 @@ if __name__ == '__main__':
     def open_browser():
         import time
         time.sleep(1)  # Wait 1 second for Flask to start
-        webbrowser.open('http://localhost:5000')
+        webbrowser.open('http://localhost:5001')
         print("🌐 Browser opened!")
     
     # Start browser in separate thread
@@ -2371,7 +2393,7 @@ if __name__ == '__main__':
     
     app.run(
         host='0.0.0.0',
-        port=5000,
+        port=5001,
         debug=True,
         threaded=True,
         use_reloader=False  # Disable reloader to prevent double initialization

@@ -195,6 +195,9 @@ async function handleProcessAll() {
         if (response.success) {
             window.PyPotteryUtils.showStatus('postprocess-status', response.message, 'success');
             window.PyPotteryUtils.showToast(`Processed ${response.count} images!`, 'success');
+            // Reload cards to get updated classifications
+            await loadProjectCards();
+            // Reload current image
             await loadPostprocessImage(postprocessState.currentIndex);
         } else {
             window.PyPotteryUtils.showStatus('postprocess-status', response.error, 'error');
