@@ -1,6 +1,6 @@
 @echo off
 echo ====================================
-echo  PyPotteryLens Flask Application
+echo  PyPotteryLens Application
 echo ====================================
 echo.
 
@@ -59,7 +59,7 @@ echo.
 echo ====================================
 echo.
 
-python app_flask.py
+python app.py
 
 deactivate
 pause

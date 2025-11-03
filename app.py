@@ -398,7 +398,7 @@ def get_icons():
 
         # Get all PNG files in static/imgs/icons folder
         icons = [f.name for f in icons_path.iterdir()
-                if f.is_file() and f.suffix.lower() == '.png' and f.name != 'pypotterylens.png']
+                if f.is_file() and f.suffix.lower() == '.png' and f.name != 'LogoLens.png']
         
         # Sort icons numerically if they are numbered
         try:
