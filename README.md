@@ -4,328 +4,558 @@
 <div align="center">
 <img src="imgs/LogoLens.png" width="150"/>
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](https://lrncrd.github.io/PyPotteryInk/)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://lrncrd.github.io/PyPotteryLens/)
 [![HuggingFace](https://img.shields.io/badge/🤗%20Models-PyPotteryLens-yellow.svg)](https://huggingface.co/lrncrd/PyPotteryLens)
-[![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![arXiv Preprint](https://img.shields.io/badge/arXiv-2412.11574-b31b1b.svg)](https://arxiv.org/abs/2412.11574)
+[![DOI](https://img.shields.io/badge/DOI-10.1016/j.daach.2025.e00452-blue.svg)](https://www.sciencedirect.com/science/article/pii/S2212054825000542)
+[![GPU Support](https://img.shields.io/badge/GPU-CUDA%20%7C%20MPS-green.svg)](https://github.com/lrncrd/PyPotteryLens)
+
 
 
 </div>
 
-As part of the **PyPottery** toolkit, `PyPotteryLens` is a Gradio desktop application for archaeological pottery drawings recording. It provides a comprehensive suite of tools for processing, detecting, and analyzing pottery fragments from scanned documents.
+As part of the [**PyPottery**](https://github.com/lrncrd/PyPottery) toolkit, `PyPotteryLens` is a Flask-based web application for archaeological pottery drawings recording. It provides a comprehensive suite of tools for processing, detecting, and analyzing pottery fragments from scanned documents, with an intuitive web interface and project-based workflow management.
 
 ## Features
 
-- **PDF Processing**: Convert multi-page PDF documents to high-quality images
-- **Fragment Detection**: Computer vision model for automatic pottery drawings detection
-- **Manual Annotation**: Interactive interface for reviewing and adjusting detected drawings
-- **Tabular Data Management**: Add tabular data to the detected drawings
-- **Post Processing**: Automatic classification of pottery drawings for a standardized recording
-- **User-Friendly Interface**: Intuitive GUI built with Gradio
+- **🗂️ Project Management**: Organize your work with project-based workflow - each archaeological dataset gets its own workspace with dedicated folders and metadata tracking
+- **📄 PDF Processing**: Convert multi-page PDF documents to high-quality images with support for split-page scanning
+- **🤖 Fragment Detection**: State-of-the-art computer vision model (YOLO-based) for automatic pottery drawings detection with customizable confidence thresholds
+- **✏️ Interactive Annotation Review**: Canvas-based editor for reviewing and adjusting detected masks with brush and eraser tools
+- **📊 Tabular Data Management**: Integrated spreadsheet interface for adding archaeological metadata to detected instances
+- **🔄 Post Processing**: Automatic classification and orientation correction using deep learning classifiers
+- **🌐 Modern Web Interface**: Clean, responsive web UI accessible from any browser
+- **💾 Auto-save**: Automatic progress saving ensures no data loss
+- **📦 Export Tools**: Generate standardized outputs with custom acronyms and optional PDF catalogs
 
 ## Installation
 
+### Requirements
+
+- Python 3.12 (tested)
+- Modern web browser (Chrome, Firefox, Edge, Safari)
+- 8GB RAM minimum (16GB recommended)
+- Optional: NVIDIA GPU with CUDA support or MPS for faster processing
+
 ### Quick Installation (Windows)
 
-1. Download the releases ZIP and extract it in a folder of your choice.
+1. **Download Python 3.12** from [Microsoft Store](https://www.microsoft.com/store/productId/9NRWMJP3717K?ocid=pdpshare) or from [python.org](https://www.python.org/downloads/)
 
-2. Download Python 3.11 from [Microsoft Store](https://www.microsoft.com/store/productId/9NRWMJP3717K?ocid=pdpshare)
+2. **Download PyPotteryLens**: Clone or download this repository
 
-3. Double click on `PyPotteryLens_WIN.bat` file. This will open an installation process. A virtual environment (`venv`) will be created and all the dependencies will be installed automatically. If CUDA is available, it will be installed as well. During the installation, basic models will be downloaded from HuggingFace. Several progress bars keep you informed about the installation process.
+3. **Run the installation script**: Double-click on `PyPotteryLens_WIN.bat`
+   
+   The script will:
+   - Create a virtual environment (`venv`)
+   - Install all dependencies automatically
+   - Detect and configure CUDA if available
+   - Download required models from HuggingFace
+   - Launch the application in your default browser
 
-4. After the installation is complete, the program will be executed and the default browser will open the GUI.
+4. **Access the application**: The web interface will open at `http://localhost:5001`
 
-> ⚠️ **Important**: If you are encountering issues with the installation, remove the `venv` folder and run the `PyPotteryLens_WIN.bat` file again. This will create a new virtual environment and install all the dependencies from scratch. 
+> ⚠️ **Troubleshooting**: If you encounter issues, delete the `venv` folder and run `PyPotteryLens_WIN.bat` again to perform a clean installation.
 
+### UNIX Installation (Linux, macOS)
 
-#### UNIX (Linux, MacOS)
+1. **Ensure Python 3.12 is installed**:
 
-1. Download the releases ZIP and extract it in a folder of your choice.
+   ```bash
+   python3 --version
+   ```
 
-2. Open a terminal and move into the downloaded folder.
+2. **Download PyPotteryLens**: Clone or download this repository
 
-3. Run the following command:
+3. **Run the installation script**:
 
    ```bash
    sh PyPotteryLens_UNIX.sh
    ```
-   This will install the required dependencies and start the application.
 
-> ⚠️ **Important**: If you are encountering issues with the installation, remove the `venv` folder and run the `PyPotteryLens_UNIX.sh` file again. This will create a new virtual environment and install all the dependencies from scratch. 
+4. **Access the application**: Open your browser at `http://localhost:5001`
 
-### Manual Way (Windows, Linux, MacOS)
+> ⚠️ **Troubleshooting**: Delete the `venv` folder and rerun the script for a clean installation.
 
-1. Download the repository ZIP
+### Manual Installation (All Platforms)
 
-2. Move into the downloaded folder
+1. **Download/Clone the repository**
 
-3. Install PyTorch
+2. **Create a virtual environment**:
 
-   - For CPU support (recommended for most users):
+   ```bash
+   python -m venv venv
+   
+   # Activate on Windows:
+   venv\Scripts\activate
+   
+   # Activate on UNIX:
+   source venv/bin/activate
+   ```
+
+3. **Install PyTorch**:
+
+   For **CPU-only** systems:
+
    ```bash
    pip install torch torchvision torchaudio
    ```
 
-   - For CUDA support (recommended for faster processing):
-
-   Ensure you have a compatible NVIDIA GPU and the appropriate CUDA drivers installed: open the terminal and run the following command:
+   For **NVIDIA GPU** systems with CUDA:
 
    ```bash
+   # Check CUDA availability
    nvidia-smi
+   
+   # Install PyTorch with CUDA 12.6 support
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
    ```
 
-   If you see a list of your GPU(s) and their status, you're good to go.
-
-   Then, install PyTorch with CUDA support:
+   For **Apple Silicon** (M1/M2/M3):
 
    ```bash
-   # For CUDA 11.8
-   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+   pip install torch torchvision torchaudio
    ```
+   PyTorch will automatically use MPS acceleration on Apple Silicon.
 
+4. **Install other dependencies**:
 
-4. Install the other required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
+5. **Download models**: The application will automatically download required models from [HuggingFace](https://huggingface.co/lrncrd/PyPotteryLens) on first launch, or download them manually:
+   - `BasicModelv8_v01.pt` → place in `models_vision/`
+   - `model_classifier.pth` → place in `models_classifier/`
 
-5. Download the basic models from [HuggingFace](https://huggingface.co/lrncrd/PyPotteryLens/tree/main) and place them in to the `models_vision` (BasicModelv8_v01.pt) and `models_classifier` (model_classifier.pth).
+6. **Launch the application**:
 
-   The project structure should look like this:
+   ```bash
+   python app.py
+   ```
 
-      ```
-      pypotterylens/
-      ├── app.py              # Main application file
-      ├── utils.py            # Utility functions and processors
-      ├── models.py           # Model definitions
-      ├── models_vision/      # Detection models (create this folder and place the model here)
-      ├── models_classifier/  # Classifier models (create this folder and place the model here)
-      ├── outputs/            # Processing outputs
-      ├── pdf2img_outputs/    # PDF conversion outputs
-      ├── imgs/               # Application images
-      └── requirements.txt    # Project dependencies
-      ```
-
-   The `models_vision` folder should look like this:
-
-      ```
-      models_vision/
-      ├── BasicModelv8_v01.pt     # Main detection model
-      └── [other_models].pt   # Additional detection models (if any)
-      ```
-
-   The `models_classifier` folder should look like this:
-
-      ```
-      models_classifier/
-      ├── model_classifier.pth     # Main classifier model
-      ```
+7. **Open your browser** at `http://localhost:5001`
 
 
 
-## Let's get started
+## Getting Started
 
-If you have installed the program using the quick installation, click on `PyPotteryLens_WIN.bat` on Windows or run `sh PyPotteryLens_UNIX.sh` in the bash on Linux or MacOS. The script detect the existing virtual environment and run the program. 
+### Launching the Application
 
-If you have installed the program manually, run the following command:
+**Windows**: Double-click `PyPotteryLens_WIN.bat`
+
+**UNIX**: Run `sh PyPotteryLens_UNIX.sh`
+
+**Manual**: Activate your virtual environment and run:
 
 ```bash
-python app.py # python3 app.py for Linux and MacOS
+python app.py
 ```
 
-This will open the GUI in your default browser.
+The application will:
+- Start a local web server
+- Automatically open your default browser at `http://localhost:5001`
+- Display initialization progress (model downloads, processor setup)
 
-## Usage
+### First Steps
 
-During the start-up, some useful information is displayed in the console. Including Directory Structure status, CUDA availability, main package versions.
+1. **Create a Project**: Click "New Project" and give it a name (e.g., "Veio_2024")
+2. **Upload a PDF**: Navigate to the PDF Processing tab and upload your document
+3. **Apply Detection Model**: Let the AI detect pottery fragments automatically
+4. **Review & Refine**: Use the annotation editor to review and adjust detections
+5. **Add Metadata**: Fill in archaeological information using the tabular interface
+6. **Post-Process**: Auto-orient and classify fragments
+7. **Export**: Generate final outputs with standardized naming
 
-Here's the description of a typical workflow:
+## Project Structure
 
-### 1. Upload a PDF
+The application organizes your work into projects, each with this structure:
 
-In the "PDF document processing" tab, you'll start your pottery analysis journey by importing your PDF. The process begins with the `Click to Upload and process a File` button, which opens a file selector where you can choose any PDF from your computer. You'll find a helpful option called `Split scanned pages` - this checkbox is particularly useful when working with scanned books where each PDF page actually contains two physical pages side by side.
+```
+projects/
+└── YourProject_20250104_123456/
+    ├── project.json              # Project metadata
+    ├── pdf_source/               # Original PDF files
+    ├── images/                   # Extracted page images
+    ├── masks/                    # Detection masks (PNG with segmentation)
+    ├── cards/                    # Individual pottery instances
+    │   ├── mask_info.csv         # Metadata spreadsheet
+    │   └── mask_info_annots.csv  # Bounding box annotations
+    ├── cards_modified/           # Oriented/classified instances
+    │   └── classifications.csv   # Classification results
+    └── exports/                  # Final exported data
+```
 
+## Usage Workflow
 
-<p align="center">
-<img src="imgs/tutorial_gif/example_pag_1.png" alt="One page layout" height="300"/>
-</p>
-<p align="center">
-One page layout
-</p>
-</p>
+### 1. 📁 Project Management
 
-<p align="center">
-<img src="imgs/tutorial_gif/example_pag_2.png" alt="Two page layout" height="300"/>
-<p align="center">
-Two pages layout
-</p>
-</p>
+Create and organize your archaeological datasets as individual projects. Each project maintains:
 
+- Workflow status tracking (PDF processed, model applied, cards extracted, etc.)
+- Custom project icons for easy identification
+- Metadata including creation date, description, and processing statistics
+- Isolated folders for all processing stages
 
+**Best Practices**:
 
-> ⚠️ **Important**: When naming your PDF files, stick to a simple format without spaces or special characters. The recommended pattern is either `Author_Year.pdf` or `Context_Year.pdf`. For example:
-> - `Cardarelli_2022.pdf`
-> - `MonteCimino_2025.pdf`
-> - `Veio_1963.pdf`
-> This naming convention ensures smooth processing and helps maintain organized outputs.
+- Use descriptive project names (e.g., "Capena_2018_Vol_II", "Veio_Excavation_2024")
+- Projects are automatically timestamped to avoid conflicts
+- You can work on multiple projects simultaneously
 
-After processing, you'll find your converted images in the `pdf2img_outputs` folder. The naming system is straightforward but differs depending on whether you used the split pages option:
+### 2. 📄 PDF Document Processing
 
-For standard processing (Split pages unchecked):
+Upload PDF files containing pottery drawings. The processor extracts high-quality images from each page.
 
-- Files are named as `{Author_Year}_page_{PageNumber}.jpg`
-- Example: `Cardarelli_2022_page_0.jpg` represents the first page of your document
+**Options**:
 
-For split processing (Split pages checked):
+- **Split Scanned Pages**: Enable this when your PDF contains two-page spreads (common in scanned books). The system will split each page into left and right halves.
 
-- Files are named as `{Author_Year}_page_{PageNumber}{side}.jpg`
-- Example: `Cardarelli_2022_page_0a.jpg` represents the left side of the first page
-- While `Cardarelli_2022_page_0b.jpg` represents the right side
+**File Naming**: Use simple formats without spaces or special characters:
 
-<p align="center">
-<img src="imgs/tutorial_gif/gif_1.gif" width="600"/>
-</p>
+- ✅ Good: `Cardarelli_2022.pdf`, `MonteCimino_2025.pdf`
+- ❌ Avoid: `My Document (2024) v2.pdf`
 
+**Output**: Images are saved to `{project}/images/` with systematic naming:
 
+- Standard: `ProjectName_page_0.jpg`, `ProjectName_page_1.jpg`, ...
+- Split mode: `ProjectName_page_0a.jpg`, `ProjectName_page_0b.jpg`, ...
 
-### 2. Apply the Model
+### 3. 🤖 Apply Detection Model
 
-In the "Apply Model" tab, you can run the computer vision model on your processed images. In the `📁 Input Selection` box, you'll find two key elements: a folder selector where you can choose the images to process (these will be in your `pdf2img_outputs` folder), and a `Model` dropdown menu that lets you select from the available models in the `models_vision` folder.
+Run the YOLO-based computer vision model to automatically detect pottery fragments.
 
-The `⚙️ Model Parameter` box contains three important settings that help you fine-tune the detection process:
+**Model Parameters**:
 
-- `Confidence Threshold` (0.1 to 1.0): This determines how certain the model needs to be before identifying something as a pottery instance. A higher value (like 0.8) means the model will only detect pottery it's very confident about, reducing false positives but potentially missing some harder-to-detect pieces. A lower value (like 0.3) will catch more pottery instances but might include some incorrect detections.
+- **Confidence Threshold** (0.1-1.0): Controls detection sensitivity
+  - Higher (0.7-0.9): Fewer detections, higher precision, misses difficult cases
+  - Lower (0.3-0.5): More detections, catches subtle instances, may include false positives
+  - Recommended: Start at 0.5 and adjust based on your dataset
 
-- `Kernel Size`: This parameter affects how the segmentation masks are processed after detection. A larger kernel size creates smoother, more rounded edges but might lose some fine details. A smaller kernel preserves more detail but might leave the edges rougher. Think of it like adjusting the "brush size" for cleaning up the detection borders.
+- **Kernel Size**: Affects mask edge smoothing during post-processing
+  - Larger values create smoother, more rounded edges
+  - Smaller values preserve fine details
+  - Recommended: 2-5 for most cases
 
-- `Iterations`: This determines how many times the post-processing is applied to the masks. More iterations create more pronounced effects - useful for closing small gaps or smoothing rough edges, but too many iterations might alter the pottery's shape too much. Work with this parameter alongside the Kernel Size to find the right balance.
+- **Iterations**: Number of morphological operation passes
+  - More iterations strengthen the smoothing/gap-closing effect
+  - Can help close small gaps in masks
+  - Recommended: 5-15 iterations
 
-Here is an example of different `Kernel Size` and `Iterations` applied to a pottery instance:
+**Advanced Options**:
 
-<p align="center">
-<img src="imgs/tutorial_gif/parameter_comparison.png" width="500"/>
-</p>
+- **Diagnostic Mode**: Process only the first 25 images for quick parameter testing
 
-In the `🔧 Advanced Options` section, you'll find the `Diagnostic Mode` checkbox. When checked, it will only process the first 25 images in your folder, letting you quickly test your parameter settings without waiting for a full dataset to process. This is particularly helpful when you're fine-tuning the Model Parameters.
+- **Image Exclusion**: Exclude specific images from processing (useful for title pages, indices, etc.)
 
-The right side of the page shows a gallery view of all the images waiting to be processed, helping you verify you've selected the correct folder and giving you a preview of what the model will work with.
+**Output**: Creates segmentation masks in `{project}/masks/` where detected pottery appears as semi-transparent overlays.
 
-When you're ready to process your images, click the `🚀 Apply Model` button. A progress bar will keep you informed as the model works through your images. The results are saved in a new folder called `{Author_Year}_mask` within the `outputs` directory, where you'll find your processed images with their segmentation masks visible.
+### 4. ✏️ Review Annotations & Extract Instances
 
-<p align="center">
-<img src="imgs/tutorial_gif/gif_2.gif" width="600"/>
-</p>
+Manually review and refine the automatic detections using an interactive canvas editor.
 
+**Tools Available**:
 
-### 3. Review annotations and extract istances
+- **Brush (🖌️)**: Add to masks, adjustable size
+- **Eraser (🧹)**: Remove parts of masks, adjustable size
 
-In the "Review Annotations and extract masks" tab, you can carefully review the computer vision results and extract individual pottery instances. In the `📁 Input Selection` area, you'll need to select the folder containing your processed images (you'll find this in the `outputs` folder with the name `{Author_Year}_mask`). 
 
-Once you select a folder, a `FileExplorer` component appears, displaying all the images available for review. Clicking on any file's name opens it in the annotation revision tool, where you'll see the results of the automatic detection. If the model has successfully identified pottery instances, they'll appear as semi-transparent grey overlays on the image - this is the segmentation mask that defines each pottery item.
+**Workflow**:
 
-The annotation revision tool provides a simple but effective set of editing options. At the bottom of the tool, you'll find two main instruments:
+1. Browse through detected images using the file explorer
+2. Click on any image to open the editor
+3. Use brush/eraser to refine mask boundaries
+4. Changes auto-save when you navigate away
+5. Click "Extract Masks" when review is complete
 
-- A **brush** (🖌️) tool for adding to the mask
-- An **eraser** (🧹) tool for removing parts of the mask
+**Output**: Individual pottery instances are saved to `{project}/cards/` with naming:
 
-Both tools come with adjustable size sliders, letting you fine-tune them for precise work. If you need to adjust your view of the whole interface, you can use the slider in the `📐 Editor Size` box to resize the annotation revision tool itself.
+- `ProjectName_page_0_mask_layer_0.png`
+- `ProjectName_page_0_mask_layer_1.png`
+- etc.
 
-> 📝 **Note**: The current version of the brush tool doesn't support transparency, which means you won't be able to see the original image through your brush strokes while drawing. We're working on adding this feature in a future update to improve the editing experience.
+Two CSV files are generated:
 
-Once you're satisfied with your annotations, the `📤 Extract Masks` button becomes your key to generating individual pottery instances. Clicking this button processes your annotations and saves the results in a new folder called `{Author_Year}_card` within the `outputs` directory. Each pottery instance gets its own image file, following a consistent naming pattern: `{Author_Year}_page_mask_layer_{InstanceNumber}.png`. 
+- `mask_info.csv`: Empty spreadsheet ready for metadata
+- `mask_info_annots.csv`: Bounding box coordinates for each instance
 
-For instance, if you're working with a document called `Cardarelli_2022.pdf`, the first extracted instance would be saved as `Cardarelli_2022_page_mask_layer_0.jpg`.
+### 5. 📊 Tabular Information
 
-> 💡 **Tip**: It's good practice to review a few extracted instances after processing to ensure the masks are clean and accurate. This can save time in later processing stages.
+Add archaeological metadata to each detected pottery instance.
 
+**Features**:
 
-<p align="center">
-<img src="imgs/tutorial_gif/gif_3.gif" width="600"/>
-</p>
+- View original images with bounding boxes highlighting each instance
+- Navigate between pages and select specific instances
+- Add custom columns for any metadata fields (e.g., "Fabric", "Chronology", "Context")
+- Auto-save: Every cell edit is immediately saved
+- Multi-instance pages: Easily switch between fragments on the same page
 
-### 4. Tabular information
+**Data Management**:
 
-In the "Tabular Information" tab, you can select the folder containing the images processed in the previous step (in the `outputs` folder: `{Author_Year}_card`). On the left side of the page, you'll see an Annotated Image component that displays both the original image and highlighted bounding boxes around each pottery instance. 
+- Data is stored in `mask_info.csv`
+- Avoid commas in cell values (CSV format limitation)
+- For bulk editing, you can export and edit in Excel/Google Sheets
 
-Navigation between images is straightforward using the Previous and Next buttons, allowing you to move through your dataset efficiently.
-At the bottom of the page, you'll find controls that let you focus on specific instances - when you select an instance, the Annotated Image component will automatically highlight just that piece, making it easier to verify details. This feature is particularly helpful when working with pages containing multiple pottery items.
+**Workflow**:
 
-On the right side of the page, you'll find the heart of the data management system - an interactive table component. When you first start, this table will contain just the basic ID for each instance on the page, but it's fully customizable to your needs. Adding new columns is simple: just type the desired column name in the "New Column Name" text box and click the Add Column button. The new column appears immediately in your table, ready for data entry.
-Data entry is straightforward - simply click on any cell in the table and type your value. One of the most convenient features is that every change you make is saved automatically, so you never have to worry about losing your work. All this information is stored in a CSV file called `mask_info.csv`, which you can find in the outputs folder.
+1. Click "Add Column" to create new metadata fields
+2. Navigate through images using Previous/Next buttons
+3. Click cells to edit values
+4. Use instance selector for pages with multiple pottery fragments
+5. Mark pages as "Reviewed" to track progress
 
+### 6. 🔄 Post Processing
 
-> ⚠️ **Important Note**: When entering data, remember to avoid using commas in your values, as this can cause issues with the CSV file format. If you need to work with complex data or make bulk edits, you can always open the CSV file in Excel or Google Sheets.
+Automatically orient and classify pottery instances using deep learning.
 
+**Processing Options**:
 
-<p align="center">
-<img src="imgs/tutorial_gif/gif_4.gif" width="600"/>
-</p>
+- **Auto Vertical Flip**: Detects and corrects upside-down pottery (mouth facing down → mouth facing up)
+- **Auto Horizontal Flip**: Standardizes profile orientation (all profiles face left)
 
-### 5. Post Processing
+**Classification**: The model automatically categorizes each instance:
 
-In the "Post Processing" tab, you can select the folder containing the images processed in the previous step (in the `outputs` folder: `{Author_Year}_card`). This tab is designed to help you standardize the orientation and classification of your pottery instances. In the `Processing Options` box, you'll find two powerful automatic processing options:
+- **ENT** (Entire/Complete): Substantially complete pottery profiles
+- **FRAG** (Fragment): Partial or fragmentary profiles
 
-- `Auto Vertical Flip`: This feature automatically detects and corrects instances where the pot's mouth is facing downward, flipping them to maintain a consistent upward orientation.
-- `Auto Horizontal Flip`: Similarly, this option ensures all pottery profiles are oriented to the left side of the image, maintaining consistency across your dataset.
+**Manual Corrections**:
 
-The Action box contains several important tools. The `Process All Images` button applies your selected processing options to every image in the folder at once - a real time-saver when working with large collections. On the right side of the page, you can compare the original and processed versions of each image side by side, making it easy to verify the results. Navigation buttons let you move through your collection smoothly.
+- **Flip Vertical/Horizontal**: Override automatic orientation if needed
+- **Type Dropdown**: Change classification between ENT/FRAG
 
-Sometimes the automatic processing might not get things quite right - that's why we've included manual correction tools. If you notice any orientation issues, you can easily fix them using the `Flip Vertical` and `Flip Horizontal` buttons. You can also update the classification of each pot between complete (ENT) and fragmentary (FRAG) using the `Type` dropdown menu. Don't worry about saving - every change you make is automatically stored.
+**Review Interface**:
 
-All processed images are saved in a new folder called `{Author_Year}_transformed_card` within the `outputs` folder. Once you're happy with the processing, you can use the `Merge Annotations` button in the Action box to combine your type classifications with the tabular information from your `mask_info.csv` file. This creates a comprehensive record in a new file called `merged_annotations.csv`.
+- **Original vs. Processed**: Side-by-side comparison
+- **Navigation**: Browse through all instances
+- **Auto-save**: All changes immediately persisted
 
-The final step is exporting your results, which you can initiate by clicking the `📦 Export Results` button. This opens the `📦 Export Options` dialog, where you can customize your export. One key feature is the ability to assign an acronym to your dataset - for example, using "CRD" would name your files sequentially as `CRD_0.png`, `CRD_1.png`, and so on. For documentation purposes, you can also generate a PDF catalog - just check the Generate PDF Catalog box, select your preferred format (A4, A3, A5, Letter, or Legal), and adjust the Image Scale Factor to ensure your pottery fits perfectly on the page. All exported files are saved in a new folder named after your chosen acronym within the `outputs` directory.
+**Output**: 
 
-<p align="center">
-<img src="imgs/tutorial_gif/gif_5.gif" width="600"/>
-</p>
+- Processed images saved to `{project}/cards_modified/`
+- Classifications stored in `classifications.csv`
+- Merge with metadata to create `merged_annotations.csv`
 
-## Dependencies
+### 7. 📦 Export Results
 
-Key dependencies include:
+Generate final outputs with standardized naming.
 
-- gradio
-- torch
-- PyMuPDF
-- ultralytics
-- pandas
-- PIL
-- scikit-image
+**Export Options**:
 
-Full list available in `requirements.txt`
+- **Acronym**: Assign a short identifier (e.g., "CRD", "VEII") for systematic file naming: files will be named: `{acronym}_0.png`, `{acronym}_1.png`, etc.
+
+
+**Output**: 
+
+- Exported files saved to `{project}/exports/{acronym}/`
+- Includes renamed images
+- Metadata CSV with final classifications
+
+## Technology Stack
+
+**Backend**:
+
+- **Flask**: Lightweight web framework for Python
+- **PyTorch**: Deep learning framework (with CUDA/MPS support)
+- **Ultralytics YOLO**: State-of-the-art object detection
+- **timm**: PyTorch image models for classification
+
+**Image Processing**:
+
+- **Pillow (PIL)**: Image manipulation
+- **scikit-image**: Advanced image processing algorithms
+- **PyMuPDF**: PDF rendering and conversion
+- **OpenCV (via scikit-image)**: Computer vision operations
+
+**Data Management**:
+
+- **pandas**: Tabular data handling and CSV operations
+- **NumPy**: Numerical computing
+- **ReportLab**: PDF generation for catalogs
+
+
+Full dependency list available in `requirements.txt`
+
+## Hardware Acceleration
+
+PyPotteryLens automatically detects and uses available hardware acceleration:
+
+- **NVIDIA GPU (CUDA)**: Recommended for fastest processing
+
+  - Requires: CUDA-compatible GPU + drivers
+  
+- **Apple Silicon (MPS)**: Native support for M1/M2/M3 chips
+
+  - Automatic MPS backend selection
+
+  
+- **CPU**: Fallback mode, works on all systems
+
+  - No special requirements
+  - Suitable for small to medium datasets
 
 ## Version History
 
-- 0.1.3
+### 0.2.0 (Current - Flask Branch)
+
+   - **Major architectural change**: Migrated from Gradio to Flask web framework
+   - **Project Management System**: Introduced project-based workflow with dedicated workspaces
+   - **Modern Web Interface**: Native HTML/CSS/JavaScript frontend with improved UX
+   - **RESTful API**: Full API for programmatic access and future integrations
+   - **Enhanced Canvas Editor**: Improved annotation tools with better performance
+   - **Real-time Progress Tracking**: Live updates for long-running operations
+   - **Auto-save Everything**: Automatic persistence for all user changes
+   - **Workflow Status Tracking**: Visual indicators for project completion stages
+   - **Multi-project Support**: Work on multiple datasets simultaneously
+   - **Improved Error Handling**: Better user feedback and error recovery
+
+### 0.1.3
+
    - Minor bug fixes
+   - Stability improvements
 
-- 0.1.2
-   - Checked compatibility with MacOS (Sonoma 15.2)
-   - Added MPS support for Apple Silicon Device
-   - Added a white border to extracted images
+### 0.1.2
 
-- 0.1.1
-   - Checked compatibility with Linux (Ubuntu 24.10) and MacOS (Sonoma 14)
-   - Improved bin packing algorithm for PDF creation
-   - Added paper's (PyPotteryLens: An Open-Source Deep Learning Framework for Automated Digitisation of Archaeological Pottery Documentation) supporting scripts
-   - Reworked the GUI for better user experience and compatibility
-- 0.1.0
-  - Initial Release
+   - Checked compatibility with macOS Sonoma 15.2
+   - Added MPS support for Apple Silicon devices
+   - Added white border to extracted images for better visibility
 
-## System compatibility
+### 0.1.1
 
-- Windows 11
-- Ubuntu 24.10
-- MacOS Sonoma 14
-- MacOS Sequoia 15.2
+   - Checked compatibility with Linux (Ubuntu 24.10) and macOS Sonoma 14
+   - Improved bin packing algorithm for PDF catalog generation
+   - Added paper's supporting scripts (PyPotteryLens: An Open-Source Deep Learning Framework)
+   - Reworked GUI for better user experience
+   
+### 0.1.0
 
-## Known Issues ⚠️
+   - Initial release (Gradio-based application)
 
-- The brush tool in the annotation revision tool doesn't support transparency, making it difficult to see the original image through brush strokes. This feature is planned for a future update.
-- For older version of MacOS (<= Monterey 12.7.5), the last version of Pytorch supported is `2.2.2`. Please modify the `requirements.txt` file accordingly.
+## System Compatibility
+
+**Tested Operating Systems**:
+
+- ✅ Windows 11
+- ✅ Ubuntu 24.10
+- ✅ macOS Sonoma 14
+- ✅ macOS Sequoia 15.2
+- ✅ macOS Tahoe 26
 
 
-## Contributors
+## Known Issues & Limitations
 
-- Lorenzo Cardarelli
+### Current Limitations
+
+
+**Large PDF Files**: Processing very large PDFs (>500 pages) may take significant time. Recommendation: Split large documents into smaller sections.
+
+
+
+### Platform-Specific Notes
+
+**macOS (≤ Monterey 12.7.5)**:
+
+- The maximum supported PyTorch version is `2.2.2`
+- Modify `requirements.txt` to pin `torch==2.2.2` before installation
+
+**Windows**:
+
+- Some antivirus software may flag the batch script - this is a false positive
+- You may need to run PowerShell with execution policy adjustments
+
+**Linux**:
+
+- Ensure you have `python3-venv` installed: `sudo apt install python3-venv`
+- For GPU support, install NVIDIA drivers and CUDA toolkit separately
+
+## Troubleshooting
+
+### Application won't start
+
+- **Delete `venv` folder** and rerun installation script
+- Check Python version: `python --version` (should be 3.10-3.12)
+- Verify no other application is using port 5000
+
+### Model download fails
+
+- Check internet connection
+- Manually download models from [HuggingFace](https://huggingface.co/lrncrd/PyPotteryLens)
+- Verify sufficient disk space (~500MB needed)
+
+### CUDA not detected (Windows/Linux)
+
+- Run `nvidia-smi` to verify drivers are installed
+- Reinstall PyTorch with correct CUDA version
+- Check that your GPU is CUDA-compatible
+
+### MPS not working (macOS)
+
+- Ensure you're on Apple Silicon (M1/M2/M3)
+- Update to latest macOS (Monterey 12.3+)
+- Verify PyTorch version supports MPS
+
+### Slow processing
+
+- Enable GPU acceleration if available
+- Use Diagnostic Mode to test with fewer images
+- Lower image resolution in PDF processing
+- Close other heavy applications
+
+### Browser shows "Connection Refused"
+
+- Check that `app.py` is running without errors
+- Verify firewall isn't blocking port 5001
+- Try accessing via IP: `http://127.0.0.1:5001`
+
+
+## Contributing
+
+We welcome contributions to PyPotteryLens! Here are some ways you can help:
+
+- 🐛 **Report bugs**: Open an issue with detailed reproduction steps
+- 💡 **Suggest features**: Share ideas for new functionality
+- 📖 **Improve documentation**: Help make the docs clearer
+- 🧪 **Test on different platforms**: Help verify compatibility
+- 💻 **Submit pull requests**: Code contributions are welcome
+
+### Development Setup
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature-name`
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## Citation
+
+If you use PyPotteryLens in your research, please cite:
+
+```bibtex
+@article{cardarelli2024pypotterylens,
+  title={PyPotteryLens: An Open-Source Deep Learning Framework for Automated Digitisation of Archaeological Pottery Documentation},
+  author={Cardarelli, Lorenzo},
+  journal={arXiv preprint arXiv:2412.11574},
+  year={2024}
+}
+```
+
+## License
+
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
+
+## Support & Contact
+
+- **GitHub Issues**: For bug reports and feature requests
+- **Email**: Contact the author for research collaborations
+- **HuggingFace**: Model repository and discussion boards
+
+
+## Roadmap
+
+Future development plans include:
+
+- [ ] Light / Dark mode toggle
+- [ ] Executable packaging for easy distribution
+- [ ] Automatic layout detection for tabular data
+
+
