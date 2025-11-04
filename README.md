@@ -2,7 +2,7 @@
 # `PyPotteryLens`
 
 <div align="center">
-<img src="imgs/LogoLens.png" width="150"/>
+<img src="imgs/LogoLens.png" width="350"/>
 
 [![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://lrncrd.github.io/PyPotteryLens/)
 [![HuggingFace](https://img.shields.io/badge/🤗%20Models-PyPotteryLens-yellow.svg)](https://huggingface.co/lrncrd/PyPotteryLens)
