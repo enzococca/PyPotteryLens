@@ -1,5 +1,5 @@
 
-# `PyPotteryLens`
+# PyPotteryLens
 
 <div align="center">
 <img src="imgs/LogoLens.png" width="350"/>
@@ -11,9 +11,21 @@
 [![DOI](https://img.shields.io/badge/DOI-10.1016/j.daach.2025.e00452-blue.svg)](https://www.sciencedirect.com/science/article/pii/S2212054825000542)
 [![GPU Support](https://img.shields.io/badge/GPU-CUDA%20%7C%20MPS-green.svg)](https://github.com/lrncrd/PyPotteryLens)
 
+---
+
+### ☕ Support This Project
+
+If you find PyPotteryInk useful for your research, consider supporting its development:
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/lrncrd)
+
+Your support helps maintain and improve this open-source tool for the archaeological community!
 
 
 </div>
+
+
+## 🎯 Overview
 
 As part of the [**PyPottery**](https://github.com/lrncrd/PyPottery) toolkit, `PyPotteryLens` is a Flask-based web application for archaeological pottery drawings recording. It provides a comprehensive suite of tools for processing, detecting, and analyzing pottery fragments from scanned documents, with an intuitive web interface and project-based workflow management.
 
