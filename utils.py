@@ -1509,14 +1509,61 @@ class MetadataExtractor:
         self.config = config
         self.project_path = config.project_path
 
+    def parse_caption_text(self, caption_text: str) -> Dict[str, any]:
+        """
+        Parse caption text to extract structured metadata.
+
+        Extracts:
+        - figure_num: Figure/Tafel/Tav number (e.g., "Fig. 37", "Tafel 5")
+        - pottery_ids: List of pottery IDs found in caption
+
+        Args:
+            caption_text: Raw caption text from PDF
+
+        Returns:
+            Dictionary with extracted metadata
+        """
+        import re
+
+        result = {
+            'figure_num': None,
+            'pottery_ids': []
+        }
+
+        if not caption_text:
+            return result
+
+        # Extract figure number patterns
+        # Patterns: Fig. XX, Figure XX, Tafel XX, Tav. XX, Abb. XX, Planche XX
+        fig_patterns = [
+            r'(Fig\.?\s*\d+[a-zA-Z]?(?:\.\d+)?)',
+            r'(Figure\s*\d+[a-zA-Z]?)',
+            r'(Tafel\s*\d+[a-zA-Z]?)',
+            r'(Tav\.?\s*\d+[a-zA-Z]?)',
+            r'(Abb\.?\s*\d+[a-zA-Z]?)',
+            r'(Planche\s*\d+[a-zA-Z]?)',
+            r'(Chapitre\s*\d+\s*figure\s*\d+)',
+        ]
+
+        for pattern in fig_patterns:
+            match = re.search(pattern, caption_text, re.IGNORECASE)
+            if match:
+                result['figure_num'] = match.group(1).strip()
+                break
+
+        # Extract pottery IDs - numbers that appear at start or isolated
+        # Common patterns: "1 2 3" at start, or "n. 1-5", or standalone numbers
+        # Look for isolated numbers at the beginning (pottery numbering in figures)
+        num_match = re.match(r'^[\s]*(\d+(?:\s+\d+)*)', caption_text)
+        if num_match:
+            numbers = num_match.group(1).split()
+            result['pottery_ids'] = [int(n) for n in numbers if n.isdigit()]
+
+        return result
+
     def extract_basic_metadata_from_filename(self, filename: str) -> Dict[str, any]:
         """
         Extract basic metadata from filename patterns.
-
-        Supported patterns:
-        - {project}_page_{num}_mask_layer_{layer}.png
-        - {project}_Tafel_{num}_mask_layer_{layer}.png
-        - {project}_Fig_{num}_mask_layer_{layer}.png
 
         Args:
             filename: The image filename
@@ -1529,10 +1576,7 @@ class MetadataExtractor:
         metadata = {
             'filename': filename,
             'page_num': None,
-            'figure_num': None,
-            'layer_id': None,
-            'pottery_id': None,
-            'caption': None
+            'layer_id': None
         }
 
         # Extract page number: _page_XXX_
@@ -1540,26 +1584,10 @@ class MetadataExtractor:
         if page_match:
             metadata['page_num'] = int(page_match.group(1))
 
-        # Extract figure/tafel number: _Tafel_XXX_ or _Fig_XXX_ or _figure_XXX_
-        fig_match = re.search(r'_(Tafel|Fig|Figure|Tav|Abb)_?(\d+[a-zA-Z]?)_', filename, re.IGNORECASE)
-        if fig_match:
-            metadata['figure_num'] = f"{fig_match.group(1)} {fig_match.group(2)}"
-
         # Extract layer ID: _layer_XXX or _mask_layer_XXX
         layer_match = re.search(r'_(?:mask_)?layer_(\d+)', filename, re.IGNORECASE)
         if layer_match:
             metadata['layer_id'] = int(layer_match.group(1))
-
-        # Build a basic caption from extracted info
-        parts = []
-        if metadata['figure_num']:
-            parts.append(metadata['figure_num'])
-        if metadata['page_num']:
-            parts.append(f"Page {metadata['page_num']}")
-        if metadata['layer_id'] is not None:
-            parts.append(f"Object {metadata['layer_id']}")
-
-        metadata['caption'] = ', '.join(parts) if parts else filename
 
         return metadata
 
@@ -1602,7 +1630,7 @@ class MetadataExtractor:
     def process_project(self, project_id: str, project_manager, period_mappings: Dict[str, str] = None) -> str:
         """
         Process all images in a project to extract BASIC metadata (no AI required).
-        Extracts: filename, page_num, figure_num, layer_id, caption from filenames.
+        Reads existing mask_info.csv and parses caption_text to extract structured data.
 
         Args:
             project_id: The project identifier
@@ -1617,53 +1645,68 @@ class MetadataExtractor:
             if not cards_path or not cards_path.exists():
                 return "No cards folder found"
 
-            # Get all card images
-            card_images = sorted([f for f in cards_path.iterdir()
-                         if f.suffix.lower() in ['.png', '.jpg', '.jpeg']])
+            # Check for existing mask_info.csv
+            mask_info_path = cards_path / 'mask_info.csv'
+            if not mask_info_path.exists():
+                return "No mask_info.csv found. Run mask extraction first."
 
-            if not card_images:
-                return "No card images found"
+            import pandas as pd
+            mask_df = pd.read_csv(mask_info_path)
+            print(f"Loaded mask_info.csv with {len(mask_df)} rows")
 
-            # Extract basic metadata from filenames (NO AI required)
-            results = []
-            for img_path in card_images:
-                metadata = self.extract_basic_metadata_from_filename(img_path.name)
+            updated_count = 0
 
-                # Add period from mappings if available
-                if period_mappings and metadata.get('figure_num'):
-                    fig_key = metadata['figure_num']
+            for idx, row in mask_df.iterrows():
+                # Get caption text if available
+                caption_text = row.get('caption_text', '')
+                if pd.isna(caption_text):
+                    caption_text = ''
+
+                # Parse caption to extract figure_num and pottery_ids
+                parsed = self.parse_caption_text(str(caption_text))
+
+                # Update figure_num if not already set or empty
+                current_fig = row.get('figure_num', '')
+                if pd.isna(current_fig) or str(current_fig).strip() == '':
+                    if parsed['figure_num']:
+                        mask_df.at[idx, 'figure_num'] = parsed['figure_num']
+                        updated_count += 1
+
+                # Update pottery_id if not already set
+                current_pottery_id = row.get('pottery_id', '')
+                if pd.isna(current_pottery_id) or str(current_pottery_id).strip() == '':
+                    if parsed['pottery_ids']:
+                        # Get layer_id to match with pottery number
+                        layer_id = None
+                        filename = row.get('mask_file', '') or row.get('filename', '')
+                        file_meta = self.extract_basic_metadata_from_filename(str(filename))
+                        layer_id = file_meta.get('layer_id')
+
+                        # If layer_id matches a pottery_id index, use it
+                        if layer_id is not None and layer_id < len(parsed['pottery_ids']):
+                            mask_df.at[idx, 'pottery_id'] = parsed['pottery_ids'][layer_id]
+                        elif parsed['pottery_ids']:
+                            # Use first pottery_id as fallback
+                            mask_df.at[idx, 'pottery_id'] = parsed['pottery_ids'][0]
+
+                # Update period from mappings if available
+                fig_num = mask_df.at[idx, 'figure_num'] if 'figure_num' in mask_df.columns else None
+                if period_mappings and fig_num and not pd.isna(fig_num):
+                    fig_key = str(fig_num).strip()
                     if fig_key in period_mappings:
-                        metadata['period'] = period_mappings[fig_key]
+                        current_period = row.get('period', '')
+                        if pd.isna(current_period) or str(current_period).strip() == '':
+                            mask_df.at[idx, 'period'] = period_mappings[fig_key]
 
-                results.append(metadata)
+            # Save updated mask_info.csv
+            mask_df.to_csv(mask_info_path, index=False)
+            print(f"Updated mask_info.csv with {updated_count} new figure numbers")
 
-            # Save results to CSV
-            if results:
-                import pandas as pd
-                df = pd.DataFrame(results)
-                output_path = self.project_path / f"{project_id}_metadata.csv"
-                df.to_csv(output_path, index=False)
+            # Also save a separate metadata CSV
+            output_path = self.project_path / f"{project_id}_metadata.csv"
+            mask_df.to_csv(output_path, index=False)
 
-                # Also update the mask_info.csv if it exists
-                mask_info_path = cards_path / 'mask_info.csv'
-                if mask_info_path.exists():
-                    try:
-                        mask_df = pd.read_csv(mask_info_path)
-                        # Merge with extracted metadata
-                        for col in ['page_num', 'figure_num', 'layer_id', 'caption', 'period']:
-                            if col in df.columns and col not in mask_df.columns:
-                                # Create mapping from filename
-                                mapping = dict(zip(df['filename'], df[col]))
-                                if 'mask_file' in mask_df.columns:
-                                    mask_df[col] = mask_df['mask_file'].map(mapping)
-                        mask_df.to_csv(mask_info_path, index=False)
-                        print(f"Updated mask_info.csv with extracted metadata")
-                    except Exception as e:
-                        print(f"Could not update mask_info.csv: {e}")
-
-                return f"Extracted basic metadata for {len(results)} images"
-            else:
-                return "No images found to process"
+            return f"Extracted metadata for {len(mask_df)} images ({updated_count} figure numbers updated)"
 
         except Exception as e:
             import traceback
