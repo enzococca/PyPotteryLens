@@ -1495,7 +1495,7 @@ import numpy as np
 
 @dataclass
 class MetadataExtractionConfig:
-    """Configuration for AI metadata extraction"""
+    """Configuration for metadata extraction"""
     project_path: Path
     api_key: str = ""
     model: str = "gpt-4o-mini"
@@ -1503,15 +1503,70 @@ class MetadataExtractionConfig:
 
 
 class MetadataExtractor:
-    """Handles AI-based metadata extraction from pottery images"""
+    """Handles metadata extraction from pottery images - basic extraction without AI"""
 
     def __init__(self, config: MetadataExtractionConfig):
         self.config = config
         self.project_path = config.project_path
 
+    def extract_basic_metadata_from_filename(self, filename: str) -> Dict[str, any]:
+        """
+        Extract basic metadata from filename patterns.
+
+        Supported patterns:
+        - {project}_page_{num}_mask_layer_{layer}.png
+        - {project}_Tafel_{num}_mask_layer_{layer}.png
+        - {project}_Fig_{num}_mask_layer_{layer}.png
+
+        Args:
+            filename: The image filename
+
+        Returns:
+            Dictionary with extracted metadata
+        """
+        import re
+
+        metadata = {
+            'filename': filename,
+            'page_num': None,
+            'figure_num': None,
+            'layer_id': None,
+            'pottery_id': None,
+            'caption': None
+        }
+
+        # Extract page number: _page_XXX_
+        page_match = re.search(r'_page_(\d+)_', filename, re.IGNORECASE)
+        if page_match:
+            metadata['page_num'] = int(page_match.group(1))
+
+        # Extract figure/tafel number: _Tafel_XXX_ or _Fig_XXX_ or _figure_XXX_
+        fig_match = re.search(r'_(Tafel|Fig|Figure|Tav|Abb)_?(\d+[a-zA-Z]?)_', filename, re.IGNORECASE)
+        if fig_match:
+            metadata['figure_num'] = f"{fig_match.group(1)} {fig_match.group(2)}"
+
+        # Extract layer ID: _layer_XXX or _mask_layer_XXX
+        layer_match = re.search(r'_(?:mask_)?layer_(\d+)', filename, re.IGNORECASE)
+        if layer_match:
+            metadata['layer_id'] = int(layer_match.group(1))
+
+        # Build a basic caption from extracted info
+        parts = []
+        if metadata['figure_num']:
+            parts.append(metadata['figure_num'])
+        if metadata['page_num']:
+            parts.append(f"Page {metadata['page_num']}")
+        if metadata['layer_id'] is not None:
+            parts.append(f"Object {metadata['layer_id']}")
+
+        metadata['caption'] = ', '.join(parts) if parts else filename
+
+        return metadata
+
     def extract_period_mappings_from_pdf(self, pdf_path: Path) -> Dict[str, str]:
         """
         Extract Tafel/Figure -> Period mappings from a reference PDF.
+        This requires AI and will return empty dict if no AI is available.
 
         Args:
             pdf_path: Path to the PDF file
@@ -1538,7 +1593,7 @@ class MetadataExtractor:
                 mappings = structure.tafel_period_map
 
         except ImportError:
-            print("ai_extractor not available, using basic extraction")
+            print("ai_extractor not available for period extraction")
         except Exception as e:
             print(f"Error extracting period mappings: {e}")
 
@@ -1546,12 +1601,13 @@ class MetadataExtractor:
 
     def process_project(self, project_id: str, project_manager, period_mappings: Dict[str, str] = None) -> str:
         """
-        Process all images in a project to extract metadata.
+        Process all images in a project to extract BASIC metadata (no AI required).
+        Extracts: filename, page_num, figure_num, layer_id, caption from filenames.
 
         Args:
             project_id: The project identifier
             project_manager: ProjectManager instance
-            period_mappings: Optional pre-extracted period mappings
+            period_mappings: Optional pre-extracted period mappings (from AI)
 
         Returns:
             Status message
@@ -1562,62 +1618,56 @@ class MetadataExtractor:
                 return "No cards folder found"
 
             # Get all card images
-            card_images = [f for f in cards_path.iterdir()
-                         if f.suffix.lower() in ['.png', '.jpg', '.jpeg']]
+            card_images = sorted([f for f in cards_path.iterdir()
+                         if f.suffix.lower() in ['.png', '.jpg', '.jpeg']])
 
             if not card_images:
                 return "No card images found"
 
-            # Try to use AI extractor if available
-            try:
-                from ai_extractor import get_extractor, image_to_base64
-                from settings_manager import get_settings_manager
+            # Extract basic metadata from filenames (NO AI required)
+            results = []
+            for img_path in card_images:
+                metadata = self.extract_basic_metadata_from_filename(img_path.name)
 
-                # Get API key from settings
-                settings_manager = get_settings_manager()
-                settings = settings_manager.get_settings()
+                # Add period from mappings if available
+                if period_mappings and metadata.get('figure_num'):
+                    fig_key = metadata['figure_num']
+                    if fig_key in period_mappings:
+                        metadata['period'] = period_mappings[fig_key]
 
-                # Try Anthropic first, then OpenAI
-                api_key = settings.get('anthropic_api_key') or settings.get('openai_api_key')
-                provider = 'anthropic' if settings.get('anthropic_api_key') else 'openai'
+                results.append(metadata)
 
-                if not api_key:
-                    return "No API key configured. Please set an API key in Settings."
+            # Save results to CSV
+            if results:
+                import pandas as pd
+                df = pd.DataFrame(results)
+                output_path = self.project_path / f"{project_id}_metadata.csv"
+                df.to_csv(output_path, index=False)
 
-                extractor = get_extractor(provider, api_key)
+                # Also update the mask_info.csv if it exists
+                mask_info_path = cards_path / 'mask_info.csv'
+                if mask_info_path.exists():
+                    try:
+                        mask_df = pd.read_csv(mask_info_path)
+                        # Merge with extracted metadata
+                        for col in ['page_num', 'figure_num', 'layer_id', 'caption', 'period']:
+                            if col in df.columns and col not in mask_df.columns:
+                                # Create mapping from filename
+                                mapping = dict(zip(df['filename'], df[col]))
+                                if 'mask_file' in mask_df.columns:
+                                    mask_df[col] = mask_df['mask_file'].map(mapping)
+                        mask_df.to_csv(mask_info_path, index=False)
+                        print(f"Updated mask_info.csv with extracted metadata")
+                    except Exception as e:
+                        print(f"Could not update mask_info.csv: {e}")
 
-                results = []
-                for img_path in card_images:
-                    # Convert image to base64
-                    img_base64 = image_to_base64(img_path)
-
-                    # Build context from period mappings if available
-                    context = ""
-                    if period_mappings:
-                        context = f"Known period mappings: {json.dumps(period_mappings)}"
-
-                    # Extract metadata
-                    result = extractor.extract_metadata(img_base64, context)
-                    if result:
-                        result['filename'] = img_path.name
-                        results.append(result)
-
-                # Save results
-                if results:
-                    import pandas as pd
-                    df = pd.DataFrame(results)
-                    output_path = self.project_path / f"{project_id}_ai_metadata.csv"
-                    df.to_csv(output_path, index=False)
-                    return f"Extracted metadata for {len(results)} images"
-                else:
-                    return "No metadata extracted"
-
-            except ImportError as e:
-                return f"AI extractor not available: {str(e)}"
-            except Exception as e:
-                return f"Error during extraction: {str(e)}"
+                return f"Extracted basic metadata for {len(results)} images"
+            else:
+                return "No images found to process"
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return f"Error processing project: {str(e)}"
 
 
