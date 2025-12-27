@@ -4,7 +4,7 @@
 <div align="center">
 <img src="imgs/LogoLens.png" width="350"/>
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://lrncrd.github.io/PyPotteryLens/)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](https://lrncrd.github.io/PyPotteryLens/)
 [![HuggingFace](https://img.shields.io/badge/🤗%20Models-PyPotteryLens-yellow.svg)](https://huggingface.co/lrncrd/PyPotteryLens)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![arXiv Preprint](https://img.shields.io/badge/arXiv-2412.11574-b31b1b.svg)](https://arxiv.org/abs/2412.11574)
@@ -408,7 +408,7 @@ PyPotteryLens automatically detects and uses available hardware acceleration:
 
 ## Version History
 
-### 0.2.0 (Current - Flask Branch)
+### 0.2.1 (Current - Flask Branch)
 
    - **Major architectural change**: Migrated from Gradio to Flask web framework
    - **Project Management System**: Introduced project-based workflow with dedicated workspaces
