@@ -135,7 +135,7 @@ function setupAISettings() {
     };
 
     // Save API keys for all providers
-    ['anthropic', 'openai', 'gemini', 'deepseek'].forEach(provider => {
+    ['anthropic', 'openai', 'gemini', 'deepseek', 'together'].forEach(provider => {
         document.getElementById(`save-${provider}-key`)?.addEventListener('click', () => {
             saveAPIKey(provider);
         });
@@ -185,6 +185,7 @@ async function loadAISettings() {
             updateKeyStatus('openai', settings.has_openai_key, settings.openai_api_key);
             updateKeyStatus('gemini', settings.has_gemini_key, settings.gemini_api_key);
             updateKeyStatus('deepseek', settings.has_deepseek_key, settings.deepseek_api_key);
+            updateKeyStatus('together', settings.has_together_key, settings.together_api_key);
 
             // Update local provider settings
             if (settings.lmstudio_base_url) {

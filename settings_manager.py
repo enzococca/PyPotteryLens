@@ -39,6 +39,7 @@ class SettingsManager:
             'openai_api_key': None,
             'gemini_api_key': None,
             'deepseek_api_key': None,
+            'together_api_key': None,
             'lmstudio_base_url': 'http://localhost:1234/v1',
             'lmstudio_model': '',
             'ollama_base_url': 'http://localhost:11434',
@@ -100,7 +101,7 @@ class SettingsManager:
         Returns:
             API key string or None if not set.
         """
-        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek']
+        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'together']
         if provider not in valid_providers:
             raise ValueError(f"Invalid provider: {provider}. Must be one of {valid_providers}")
 
@@ -118,7 +119,7 @@ class SettingsManager:
         Returns:
             True if successful, False otherwise.
         """
-        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek']
+        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'together']
         if provider not in valid_providers:
             raise ValueError(f"Invalid provider: {provider}. Must be one of {valid_providers}")
 
@@ -146,7 +147,7 @@ class SettingsManager:
         Returns:
             True if successful, False otherwise.
         """
-        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'lmstudio', 'ollama']
+        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'together', 'lmstudio', 'ollama']
         if provider not in valid_providers:
             raise ValueError(f"Invalid provider: {provider}. Must be one of {valid_providers}")
 
@@ -202,7 +203,7 @@ class SettingsManager:
         Returns:
             True if successful, False otherwise.
         """
-        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek']
+        valid_providers = ['anthropic', 'openai', 'gemini', 'deepseek', 'together']
         if provider not in valid_providers:
             raise ValueError(f"Invalid provider: {provider}. Must be one of {valid_providers}")
 
