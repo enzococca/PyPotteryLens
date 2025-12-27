@@ -1570,13 +1570,37 @@ class MetadataExtractor:
 
             # Try to use AI extractor if available
             try:
-                from ai_extractor import AIMetadataExtractor
-                extractor = AIMetadataExtractor()
+                from ai_extractor import get_extractor, image_to_base64
+                from settings_manager import get_settings_manager
+
+                # Get API key from settings
+                settings_manager = get_settings_manager()
+                settings = settings_manager.get_settings()
+
+                # Try Anthropic first, then OpenAI
+                api_key = settings.get('anthropic_api_key') or settings.get('openai_api_key')
+                provider = 'anthropic' if settings.get('anthropic_api_key') else 'openai'
+
+                if not api_key:
+                    return "No API key configured. Please set an API key in Settings."
+
+                extractor = get_extractor(provider, api_key)
 
                 results = []
                 for img_path in card_images:
-                    metadata = extractor.extract_metadata_from_image(img_path, period_mappings)
-                    results.append(metadata)
+                    # Convert image to base64
+                    img_base64 = image_to_base64(img_path)
+
+                    # Build context from period mappings if available
+                    context = ""
+                    if period_mappings:
+                        context = f"Known period mappings: {json.dumps(period_mappings)}"
+
+                    # Extract metadata
+                    result = extractor.extract_metadata(img_base64, context)
+                    if result:
+                        result['filename'] = img_path.name
+                        results.append(result)
 
                 # Save results
                 if results:
@@ -1585,9 +1609,11 @@ class MetadataExtractor:
                     output_path = self.project_path / f"{project_id}_ai_metadata.csv"
                     df.to_csv(output_path, index=False)
                     return f"Extracted metadata for {len(results)} images"
+                else:
+                    return "No metadata extracted"
 
-            except ImportError:
-                return "AI extractor not available"
+            except ImportError as e:
+                return f"AI extractor not available: {str(e)}"
             except Exception as e:
                 return f"Error during extraction: {str(e)}"
 
