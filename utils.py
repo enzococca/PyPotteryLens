@@ -1627,20 +1627,24 @@ class MetadataExtractor:
 
         return mappings
 
-    def process_project(self, project_id: str, project_manager, period_mappings: Dict[str, str] = None) -> str:
+    def process_project(self, project_id: str, project_manager, period_mappings: Dict[str, str] = None, pdf_path: Path = None) -> str:
         """
         Process all images in a project to extract BASIC metadata (no AI required).
-        Reads existing mask_info.csv and parses caption_text to extract structured data.
+        Reads PDF text, associates it with masks via page numbers, and parses captions.
 
         Args:
             project_id: The project identifier
             project_manager: ProjectManager instance
             period_mappings: Optional pre-extracted period mappings (from AI)
+            pdf_path: Optional path to source PDF for text extraction
 
         Returns:
             Status message
         """
         try:
+            import re
+            import pandas as pd
+
             cards_path = project_manager.get_project_path(project_id, 'cards')
             if not cards_path or not cards_path.exists():
                 return "No cards folder found"
@@ -1650,17 +1654,73 @@ class MetadataExtractor:
             if not mask_info_path.exists():
                 return "No mask_info.csv found. Run mask extraction first."
 
-            import pandas as pd
             mask_df = pd.read_csv(mask_info_path)
             print(f"Loaded mask_info.csv with {len(mask_df)} rows")
 
+            # Extract page texts from PDF if provided
+            page_texts = {}
+            if pdf_path and Path(pdf_path).exists():
+                try:
+                    import fitz
+                    doc = fitz.open(str(pdf_path))
+                    for page_num in range(len(doc)):
+                        # Store text with 0-indexed page number
+                        page_texts[page_num] = doc[page_num].get_text()
+                    doc.close()
+                    print(f"Extracted text from {len(page_texts)} pages of PDF")
+                except Exception as e:
+                    print(f"Warning: Could not extract PDF text: {e}")
+            else:
+                # Try to find PDF in project
+                project_path = project_manager.get_project_path(project_id)
+                if project_path:
+                    pdf_files = list(project_path.glob('*.pdf'))
+                    if pdf_files:
+                        try:
+                            import fitz
+                            doc = fitz.open(str(pdf_files[0]))
+                            for page_num in range(len(doc)):
+                                page_texts[page_num] = doc[page_num].get_text()
+                            doc.close()
+                            print(f"Extracted text from {len(page_texts)} pages of {pdf_files[0].name}")
+                        except Exception as e:
+                            print(f"Warning: Could not extract PDF text: {e}")
+
+            # Ensure required columns exist
+            if 'caption_text' not in mask_df.columns:
+                mask_df['caption_text'] = ''
+            if 'page_num' not in mask_df.columns:
+                mask_df['page_num'] = ''
+            if 'figure_num' not in mask_df.columns:
+                mask_df['figure_num'] = ''
+            if 'pottery_id' not in mask_df.columns:
+                mask_df['pottery_id'] = ''
+            if 'period' not in mask_df.columns:
+                mask_df['period'] = ''
+
             updated_count = 0
+            caption_count = 0
 
             for idx, row in mask_df.iterrows():
-                # Get caption text if available
+                # Get filename and extract page number
+                filename = row.get('mask_file', '') or row.get('file', '')
+                file_meta = self.extract_basic_metadata_from_filename(str(filename))
+                page_num = file_meta.get('page_num')
+
+                # Update page_num if extracted
+                if page_num is not None:
+                    current_page = row.get('page_num', '')
+                    if pd.isna(current_page) or str(current_page).strip() == '':
+                        mask_df.at[idx, 'page_num'] = page_num
+
+                # Get or extract caption text
                 caption_text = row.get('caption_text', '')
-                if pd.isna(caption_text):
-                    caption_text = ''
+                if pd.isna(caption_text) or str(caption_text).strip() == '':
+                    # Try to get caption from PDF page text
+                    if page_num is not None and page_num in page_texts:
+                        caption_text = page_texts[page_num]
+                        mask_df.at[idx, 'caption_text'] = caption_text[:2000]  # Limit size
+                        caption_count += 1
 
                 # Parse caption to extract figure_num and pottery_ids
                 parsed = self.parse_caption_text(str(caption_text))
@@ -1676,12 +1736,7 @@ class MetadataExtractor:
                 current_pottery_id = row.get('pottery_id', '')
                 if pd.isna(current_pottery_id) or str(current_pottery_id).strip() == '':
                     if parsed['pottery_ids']:
-                        # Get layer_id to match with pottery number
-                        layer_id = None
-                        filename = row.get('mask_file', '') or row.get('filename', '')
-                        file_meta = self.extract_basic_metadata_from_filename(str(filename))
                         layer_id = file_meta.get('layer_id')
-
                         # If layer_id matches a pottery_id index, use it
                         if layer_id is not None and layer_id < len(parsed['pottery_ids']):
                             mask_df.at[idx, 'pottery_id'] = parsed['pottery_ids'][layer_id]
@@ -1700,13 +1755,13 @@ class MetadataExtractor:
 
             # Save updated mask_info.csv
             mask_df.to_csv(mask_info_path, index=False)
-            print(f"Updated mask_info.csv with {updated_count} new figure numbers")
+            print(f"Updated mask_info.csv: {caption_count} captions, {updated_count} figure numbers")
 
             # Also save a separate metadata CSV
             output_path = self.project_path / f"{project_id}_metadata.csv"
             mask_df.to_csv(output_path, index=False)
 
-            return f"Extracted metadata for {len(mask_df)} images ({updated_count} figure numbers updated)"
+            return f"Extracted metadata for {len(mask_df)} images ({updated_count} figure numbers, {caption_count} captions extracted)"
 
         except Exception as e:
             import traceback
