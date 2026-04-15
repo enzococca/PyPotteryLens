@@ -243,6 +243,7 @@ function downloadFile(data, filename, mimeType = 'text/plain') {
 async function pollOperationProgress(operation, statusElementId, progressBarId) {
     let attempts = 0;
     const maxAttempts = 600; // 5 minutes max
+    let seenActive = false; // Track whether we've seen the operation start
     
     const statusEl = document.getElementById(statusElementId);
     const progressBar = document.getElementById(progressBarId);
@@ -254,6 +255,7 @@ async function pollOperationProgress(operation, statusElementId, progressBarId) 
             
             if (data.active && data.operation === operation) {
                 // Operation is running, update UI
+                seenActive = true;
                 if (statusEl) {
                     statusEl.textContent = `${data.message} (${data.percent}%)`;
                     statusEl.className = 'status-message info';
@@ -262,8 +264,8 @@ async function pollOperationProgress(operation, statusElementId, progressBarId) 
                     progressBar.style.width = `${data.percent}%`;
                     progressBar.textContent = `${data.percent}%`;
                 }
-            } else if (!data.active) {
-                // Operation completed
+            } else if (!data.active && seenActive) {
+                // Operation completed (was active, now finished)
                 if (progressBar) {
                     progressBar.style.width = '100%';
                     progressBar.textContent = '100%';

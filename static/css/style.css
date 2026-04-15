@@ -1010,6 +1010,26 @@ body {
     border-color: var(--primary-color);
 }
 
+.postprocess-image-list .image-list-item[data-tooltip] {
+    position: relative;
+}
+
+.postprocess-image-list .image-list-item[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    z-index: 200;
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 .postprocess-image-list .image-list-item.active {
     background: #dbeafe;
     border-color: var(--primary-color);

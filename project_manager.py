@@ -4,10 +4,16 @@ Handles creation, loading, and management of project workspaces
 """
 
 import json
+import re
 import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
+
+
+def _natural_sort_key(s: str):
+    """Key function for natural (human) sort order: image_2 before image_10."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
 
 class ProjectManager:
     """Manages project workspaces with hierarchical folder structure"""
@@ -322,7 +328,7 @@ class ProjectManager:
             if file_path.is_file() and file_path.suffix.lower() in image_extensions:
                 images.append(file_path.name)
         
-        return sorted(images)
+        return sorted(images, key=_natural_sort_key)
     
     def count_files(self, project_id: str, folder_type: str = 'images') -> int:
         """

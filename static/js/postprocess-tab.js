@@ -402,6 +402,7 @@ function populatePostprocessFileList(cards) {
         const item = document.createElement('div');
         item.className = 'image-list-item';
         item.dataset.index = index;
+        item.dataset.tooltip = filename;
         
         item.innerHTML = `
             <span class="image-number">${index}</span>

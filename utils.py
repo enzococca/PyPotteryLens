@@ -273,10 +273,17 @@ class ModelProcessor:
             # Setup output directory for masks
             os.makedirs(masks_path, exist_ok=True)
             
-            # Get all images
+            # Get all images (natural sort: image_1, image_2 ... image_10)
+            import re as _re
+            def _natural_key(s):
+                return [int(c) if c.isdigit() else c.lower() for c in _re.split(r'(\d+)', s)]
+
             image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'}
-            images = [f.name for f in images_path.iterdir() 
-                     if f.is_file() and f.suffix.lower() in image_extensions]
+            images = sorted(
+                [f.name for f in images_path.iterdir()
+                 if f.is_file() and f.suffix.lower() in image_extensions],
+                key=_natural_key
+            )
             
             # Filter out excluded images
             if excluded_images:

@@ -453,8 +453,11 @@ async function saveMask() {
 async function extractCards() {
     if (!annotationState.currentProject) return;
     if (annotationState.isModified) await saveMask();
-    if (!confirm('Extract cards from all masks?')) return;
-    
+
+    // Show custom confirmation dialog instead of native confirm()
+    const confirmed = await showExtractConfirmDialog();
+    if (!confirmed) return;
+
     const projectId = annotationState.currentProject.project_id;
     const btn = document.getElementById('extract-masks-btn');
     
@@ -552,4 +555,28 @@ function hideLoading() {
 
 // Export with unique name to avoid conflicts with model-tab
 window.loadAnnotationProjectImages = loadProjectImages;
+
+// Custom dialog for extract confirmation — returns a Promise<boolean>
+function showExtractConfirmDialog() {
+    return new Promise((resolve) => {
+        const dialog = document.getElementById('extract-confirm-dialog');
+        const okBtn = document.getElementById('extract-confirm-ok');
+        const cancelBtn = document.getElementById('extract-confirm-cancel');
+
+        function cleanup(result) {
+            dialog.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            resolve(result);
+        }
+
+        function onOk() { cleanup(true); }
+        function onCancel() { cleanup(false); }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        dialog.style.display = 'flex';
+    });
+}
+
 console.log('[Annotation] Ready');

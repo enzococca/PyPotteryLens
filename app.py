@@ -6,6 +6,7 @@ Migrated from Gradio to Flask with native HTML, CSS, and JavaScript
 from flask import Flask, render_template, request, jsonify, send_file, send_from_directory, Response
 from pathlib import Path
 import os
+import re
 import json
 import base64
 from io import BytesIO
@@ -297,6 +298,11 @@ background_initialization()
 def get_init_status():
     """Get initialization status"""
     return jsonify(init_status)
+
+@app.route('/api/operation-progress')
+def get_operation_progress():
+    """Get current operation progress for frontend polling"""
+    return jsonify(operation_progress)
 
 @app.route('/api/system-info')
 def get_system_info():
@@ -1188,9 +1194,13 @@ def get_project_cards(project_id):
             })
         
         # Get all card images
+        def _natural_key(s):
+            return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
+
         card_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
         cards = sorted([f.name for f in cards_path.iterdir() 
-                       if f.is_file() and f.suffix.lower() in card_extensions])
+                       if f.is_file() and f.suffix.lower() in card_extensions],
+                      key=_natural_key)
         
         # Load classifications if available (check both cards and cards_modified)
         classifications = {}
@@ -1842,8 +1852,12 @@ def process_project_cards(project_id):
         # Set flip options
         second_step_processor.set_flip_options(flip_vertical, flip_horizontal)
         
+        def _natural_key(s):
+            return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(s.name))]
+
         # Get all card images
-        card_files = sorted([f for f in cards_path.iterdir() if f.suffix.lower() in ['.png', '.jpg', '.jpeg']])
+        card_files = sorted([f for f in cards_path.iterdir() if f.suffix.lower() in ['.png', '.jpg', '.jpeg']],
+                           key=_natural_key)
         
         if not card_files:
             return jsonify({'error': 'No card images found', 'success': False}), 404
@@ -1859,7 +1873,7 @@ def process_project_cards(project_id):
             try:
                 # Update progress
                 update_operation_progress('postprocess', idx + 1, total_cards, 
-                                        f'Processing {card_file.name}')
+                                        f'Processing image {idx + 1} of {total_cards}')
                 
                 # Process the image
                 type_pred, pos_pred, rot_pred, transformed_image = second_step_processor.process_image(str(card_file))
