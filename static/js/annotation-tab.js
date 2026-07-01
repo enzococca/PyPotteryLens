@@ -28,7 +28,15 @@ const annotationState = {
     canvasZoom: 1,           // CSS zoom multiplier over the canvas buffer
     brushCursor: null,       // {x, y} buffer coords for brush/eraser size ring
     colorize: false,         // colour each separate mask differently
-    colorizedCanvas: null    // cached offscreen canvas with the coloured masks
+    colorizedCanvas: null,   // cached offscreen canvas with the coloured masks
+    // Scale calibration
+    scales: [],              // committed scale entries for current page (original coords)
+    scaleDraftP1: null,      // [ox, oy] first ruler endpoint, null if not started
+    scaleDraftP2: null,      // [ox, oy] second endpoint while popup is open
+    scaleStep: null,         // null = ruler mode | 'zone' = zone-drag mode
+    scaleZoneTargetIdx: null,// which scale entry gets the zone
+    scaleZoneDragStart: null,// {x, y} original coords at drag start
+    scaleCursorPos: null     // {x, y} display coords of cursor (live preview)
 };
 
 const POLYGON_CLOSE_THRESHOLD = 12; // display px to snap-close onto first point
@@ -43,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSaveButton();
     initializeExtractButton();
     initializeZoomControls();
+    initializeScalePopup();
 
     window.addEventListener('projectChanged', handleProjectChanged);
     loadCurrentProject();
@@ -127,6 +136,15 @@ function initializeSaveButton() {
 function initializeExtractButton() {
     const btn = document.getElementById('extract-masks-btn');
     if (btn) btn.addEventListener('click', extractCards);
+}
+
+function initializeScalePopup() {
+    document.getElementById('scale-confirm-btn')?.addEventListener('click', confirmScaleInput);
+    document.getElementById('scale-cancel-btn')?.addEventListener('click', () => { cancelScaleDraft(); redrawCanvas(); });
+    document.getElementById('scale-cm-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); confirmScaleInput(); }
+        else if (e.key === 'Escape') { e.preventDefault(); cancelScaleDraft(); redrawCanvas(); }
+    });
 }
 
 function initializeZoomControls() {
@@ -434,6 +452,7 @@ async function selectImage(index) {
         
         annotationState.isModified = false;
         await loadVessels(img.baseName);
+        await loadScales(img.baseName);
         if (annotationState.colorize) computeColorized();
         redrawCanvas();
         showEditor();
@@ -491,6 +510,7 @@ function redrawCanvas() {
     }
     ctx.globalAlpha = 1.0;
     drawPolygons(ctx);
+    drawScaleLines(ctx);
     drawBrushCursor(ctx);
 }
 
@@ -713,6 +733,10 @@ function onCanvasDblClick(e) {
 }
 
 function onPolygonKeyDown(e) {
+    if (annotationState.currentTool === 'scale') {
+        if (e.key === 'Escape') { e.preventDefault(); cancelScaleDraft(); redrawCanvas(); }
+        return;
+    }
     if (annotationState.currentTool !== 'polygon') return;
     if (e.key === 'Enter') { e.preventDefault(); finishPolygon(); }
     else if (e.key === 'Escape') { e.preventDefault(); cancelPolygon(); }
@@ -728,11 +752,19 @@ function startDrawing(e) {
         addPolygonVertex(e);
         return;
     }
+    if (annotationState.currentTool === 'scale') {
+        handleScaleMouseDown(e);
+        return;
+    }
     annotationState.isDrawing = true;
     draw(e);
 }
 
-function stopDrawing() {
+function stopDrawing(e) {
+    if (annotationState.currentTool === 'scale' && annotationState.scaleStep === 'zone' && annotationState.isDrawing) {
+        handleScaleZoneEnd(e);
+        return;
+    }
     if (!annotationState.isDrawing) return;
     annotationState.isDrawing = false;
     if (annotationState.colorize) {
@@ -748,6 +780,12 @@ function draw(e) {
             annotationState.mousePreview = eventToDisplayXY(e);
             redrawCanvas();
         }
+        return;
+    }
+
+    if (annotationState.currentTool === 'scale') {
+        annotationState.scaleCursorPos = eventToDisplayXY(e);
+        redrawCanvas();
         return;
     }
 
@@ -780,6 +818,7 @@ function onCanvasMouseLeave() {
     const wasDrawing = annotationState.isDrawing;
     annotationState.isDrawing = false;
     annotationState.brushCursor = null;
+    annotationState.scaleCursorPos = null;
     if (wasDrawing && annotationState.colorize) computeColorized();
     redrawCanvas();
 }
@@ -788,6 +827,10 @@ function selectTool(tool) {
     // Abandon any half-drawn polygon when switching tools
     if (annotationState.currentTool === 'polygon' && tool !== 'polygon') {
         cancelPolygon();
+    }
+    // Cancel in-progress scale when switching away
+    if (annotationState.currentTool === 'scale' && tool !== 'scale') {
+        cancelScaleDraft();
     }
     annotationState.currentTool = tool;
     document.querySelectorAll('.btn-tool').forEach(btn => {
@@ -872,6 +915,273 @@ async function persistVessels() {
         });
     } catch (e) {
         console.error('[Annotation] Failed to persist vessels:', e);
+    }
+}
+
+// ---- Scale calibration --------------------------------------------------
+
+function computeScaleRatio(s) {
+    const dx = s.p2[0] - s.p1[0];
+    const dy = s.p2[1] - s.p1[1];
+    const distPx = Math.hypot(dx, dy);
+    return s.real_cm > 0 ? distPx / s.real_cm : null;
+}
+
+async function loadScales(baseName) {
+    annotationState.scales = [];
+    annotationState.scaleDraftP1 = null;
+    annotationState.scaleDraftP2 = null;
+    annotationState.scaleStep = null;
+    if (!annotationState.currentProject) { renderScalesPanel(); return; }
+    const projectId = annotationState.currentProject.project_id;
+    try {
+        const res = await fetch(`/api/projects/${projectId}/scale/${encodeURIComponent(baseName)}`);
+        const data = await res.json();
+        if (data.success) annotationState.scales = data.scales || [];
+    } catch (e) {
+        console.warn('[Annotation] Could not load scales:', e);
+    }
+    renderScalesPanel();
+}
+
+function renderScalesPanel() {
+    const panel = document.getElementById('scales-panel');
+    const list = document.getElementById('scales-list');
+    const badge = document.getElementById('scales-count');
+    if (!panel || !list) return;
+
+    const scales = annotationState.scales || [];
+    if (badge) badge.textContent = scales.length;
+
+    if (scales.length === 0) {
+        panel.style.display = 'none';
+        list.innerHTML = '';
+        return;
+    }
+    panel.style.display = 'block';
+    list.innerHTML = scales.map((s, i) => {
+        const ratio = computeScaleRatio(s);
+        const ratioStr = ratio ? ratio.toFixed(1) + ' px/cm' : '—';
+        const zoneStr = s.zone ? '✓ zone set' : 'global';
+        return `
+            <div class="vessel-item scale-line-item">
+                <span class="vessel-item-label">#${i + 1} · ${s.real_cm}cm → <code>${ratioStr}</code> <em>(${zoneStr})</em></span>
+                <div class="scale-item-actions">
+                    <button class="btn-scale-zone" data-idx="${i}" title="Draw a zone rectangle on canvas to limit this scale to a page region">📍</button>
+                    <button class="vessel-delete btn-scale-del" data-idx="${i}">🗑️</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    list.querySelectorAll('.btn-scale-zone').forEach(btn => {
+        btn.addEventListener('click', () => startScaleZone(parseInt(btn.dataset.idx)));
+    });
+    list.querySelectorAll('.btn-scale-del').forEach(btn => {
+        btn.addEventListener('click', () => deleteScale(parseInt(btn.dataset.idx)));
+    });
+}
+
+function startScaleZone(idx) {
+    annotationState.scaleZoneTargetIdx = idx;
+    annotationState.scaleStep = 'zone';
+    annotationState.scaleZoneDragStart = null;
+    selectTool('scale');
+    if (window.PyPotteryUtils) window.PyPotteryUtils.showToast('Drag a rectangle on the canvas to define the zone for this scale', 'info');
+}
+
+function deleteScale(idx) {
+    annotationState.scales.splice(idx, 1);
+    renderScalesPanel();
+    redrawCanvas();
+    persistScales();
+}
+
+async function persistScales() {
+    if (!annotationState.currentProject) return;
+    const img = annotationState.images[annotationState.currentIndex];
+    if (!img) return;
+    const projectId = annotationState.currentProject.project_id;
+    try {
+        await fetch(`/api/projects/${projectId}/scale/${encodeURIComponent(img.baseName)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scales: annotationState.scales })
+        });
+    } catch (e) {
+        console.error('[Annotation] Failed to persist scales:', e);
+    }
+}
+
+// Mouse handlers for the scale tool
+
+function handleScaleMouseDown(e) {
+    const dxy = eventToDisplayXY(e);
+    const [ox, oy] = displayToOriginal(dxy.x, dxy.y);
+
+    if (annotationState.scaleStep === 'zone') {
+        annotationState.scaleZoneDragStart = { x: ox, y: oy };
+        annotationState.isDrawing = true;
+        return;
+    }
+
+    // Ruler mode: first click = p1, second click = p2 → show popup
+    if (annotationState.scaleDraftP1 === null) {
+        annotationState.scaleDraftP1 = [ox, oy];
+    } else {
+        const p1 = annotationState.scaleDraftP1;
+        const distPx = Math.hypot(ox - p1[0], oy - p1[1]);
+        if (distPx < 5) return; // too close, ignore
+        annotationState.scaleDraftP2 = [ox, oy];
+        showScalePopup();
+    }
+    redrawCanvas();
+}
+
+function handleScaleZoneEnd(e) {
+    const dxy = eventToDisplayXY(e);
+    const [ox, oy] = displayToOriginal(dxy.x, dxy.y);
+    const start = annotationState.scaleZoneDragStart;
+    annotationState.isDrawing = false;
+    annotationState.scaleZoneDragStart = null;
+
+    if (!start || Math.abs(ox - start.x) < 5 || Math.abs(oy - start.y) < 5) {
+        annotationState.scaleStep = null;
+        annotationState.scaleZoneTargetIdx = null;
+        redrawCanvas();
+        return;
+    }
+
+    const idx = annotationState.scaleZoneTargetIdx;
+    if (idx !== null && annotationState.scales[idx]) {
+        annotationState.scales[idx].zone = [
+            Math.min(start.x, ox), Math.min(start.y, oy),
+            Math.max(start.x, ox), Math.max(start.y, oy)
+        ];
+        persistScales();
+        renderScalesPanel();
+    }
+    annotationState.scaleStep = null;
+    annotationState.scaleZoneTargetIdx = null;
+    redrawCanvas();
+}
+
+function showScalePopup() {
+    const popup = document.getElementById('scale-input-popup');
+    if (!popup) return;
+    popup.style.display = 'flex';
+    const input = document.getElementById('scale-cm-input');
+    if (input) { input.value = ''; input.focus(); }
+}
+
+function hideScalePopup() {
+    const popup = document.getElementById('scale-input-popup');
+    if (popup) popup.style.display = 'none';
+}
+
+function cancelScaleDraft() {
+    annotationState.scaleDraftP1 = null;
+    annotationState.scaleDraftP2 = null;
+    annotationState.scaleStep = null;
+    annotationState.scaleZoneTargetIdx = null;
+    annotationState.scaleZoneDragStart = null;
+    hideScalePopup();
+}
+
+function confirmScaleInput() {
+    const input = document.getElementById('scale-cm-input');
+    const val = parseFloat(input?.value);
+    if (!val || val <= 0) { input?.focus(); return; }
+    const p1 = annotationState.scaleDraftP1;
+    const p2 = annotationState.scaleDraftP2;
+    if (!p1 || !p2) return;
+    annotationState.scales.push({ p1, p2, real_cm: val, zone: null });
+    persistScales();
+    renderScalesPanel();
+    cancelScaleDraft();
+    redrawCanvas();
+}
+
+// Draw committed scale lines + zones + in-progress drafts
+function drawScaleLines(ctx) {
+    const scales = annotationState.scales || [];
+
+    scales.forEach((s) => {
+        const [dx1, dy1] = originalToDisplay(s.p1[0], s.p1[1]);
+        const [dx2, dy2] = originalToDisplay(s.p2[0], s.p2[1]);
+        const len = Math.hypot(dx2 - dx1, dy2 - dy1);
+        if (len < 1) return;
+
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(dx1, dy1);
+        ctx.lineTo(dx2, dy2);
+        ctx.stroke();
+
+        // Endpoint ticks (perpendicular to line)
+        const nx = (dy2 - dy1) / len, ny = -(dx2 - dx1) / len;
+        const tk = 6;
+        ctx.beginPath();
+        ctx.moveTo(dx1 - nx * tk, dy1 - ny * tk); ctx.lineTo(dx1 + nx * tk, dy1 + ny * tk);
+        ctx.moveTo(dx2 - nx * tk, dy2 - ny * tk); ctx.lineTo(dx2 + nx * tk, dy2 + ny * tk);
+        ctx.stroke();
+
+        // Label
+        const ratio = computeScaleRatio(s);
+        const label = ratio ? `${s.real_cm}cm · ${ratio.toFixed(1)} px/cm` : `${s.real_cm}cm`;
+        const mx = (dx1 + dx2) / 2, my = (dy1 + dy2) / 2;
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(label, mx + 4, my - 4);
+
+        // Zone rectangle
+        if (s.zone) {
+            const [zx1, zy1] = originalToDisplay(s.zone[0], s.zone[1]);
+            const [zx2, zy2] = originalToDisplay(s.zone[2], s.zone[3]);
+            ctx.setLineDash([5, 3]);
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = '#fef3c7';
+            ctx.fillRect(zx1, zy1, zx2 - zx1, zy2 - zy1);
+            ctx.globalAlpha = 1;
+            ctx.strokeRect(zx1, zy1, zx2 - zx1, zy2 - zy1);
+            ctx.setLineDash([]);
+        }
+        ctx.restore();
+    });
+
+    // Draft ruler: p1 placed, waiting for p2
+    if (annotationState.scaleDraftP1 && !annotationState.scaleDraftP2 && annotationState.scaleCursorPos) {
+        const [dx1, dy1] = originalToDisplay(annotationState.scaleDraftP1[0], annotationState.scaleDraftP1[1]);
+        const { x: cx, y: cy } = annotationState.scaleCursorPos;
+        ctx.save();
+        ctx.setLineDash([5, 3]);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(dx1, dy1); ctx.lineTo(cx, cy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath(); ctx.arc(dx1, dy1, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+
+    // Draft zone rect
+    if (annotationState.scaleStep === 'zone' && annotationState.isDrawing &&
+        annotationState.scaleZoneDragStart && annotationState.scaleCursorPos) {
+        const [zx1, zy1] = originalToDisplay(annotationState.scaleZoneDragStart.x, annotationState.scaleZoneDragStart.y);
+        const { x: cx, y: cy } = annotationState.scaleCursorPos;
+        ctx.save();
+        ctx.setLineDash([5, 3]);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(zx1, zy1, cx - zx1, cy - zy1);
+        ctx.globalAlpha = 1;
+        ctx.strokeRect(zx1, zy1, cx - zx1, cy - zy1);
+        ctx.setLineDash([]);
+        ctx.restore();
     }
 }
 

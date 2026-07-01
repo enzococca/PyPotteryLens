@@ -552,6 +552,13 @@
                                 </div>
                                 <div id="annotation-canvas-container" class="annotation-canvas-container">
                                     <canvas id="annotation-canvas"></canvas>
+                                    <!-- Scale calibration distance popup -->
+                                    <div id="scale-input-popup" class="scale-input-popup" style="display:none;">
+                                        <span class="scale-popup-label">📏 Distance (cm):</span>
+                                        <input type="number" id="scale-cm-input" min="0.01" step="0.01" placeholder="e.g. 5">
+                                        <button id="scale-confirm-btn" class="btn btn-primary btn-sm">✓</button>
+                                        <button id="scale-cancel-btn" class="btn btn-secondary btn-sm">✗</button>
+                                    </div>
                                 </div>
                                 <div class="editor-controls">
                                     <div class="control-cluster">
@@ -565,6 +572,8 @@
                                         <button class="btn btn-tool" id="eraser-tool" data-tool="eraser">🧹 Eraser</button>
                                         <button class="btn btn-tool" id="polygon-tool" data-tool="polygon"
                                             title="Draw a polygon around a vessel the model missed (e.g. a vessel drawn inside another). Click to add points; click the first point or double-click to close.">📐 Polygon</button>
+                                        <button class="btn btn-tool" id="scale-tool" data-tool="scale"
+                                            title="Calibrate the graphic scale bar: click two endpoints, then enter the real distance in cm.">📏 Scale</button>
                                         <button class="btn btn-tool" id="clear-tool" data-tool="clear">🗑️ Clear</button>
                                         <button class="btn btn-tool" id="colorize-toggle"
                                             title="Colour each separate mask differently (like a political map) to spot masks that are fused together.">🎨 Colorize</button>
@@ -585,6 +594,15 @@
                                         <span class="vessels-hint">Each polygon becomes a separate card when you extract.</span>
                                     </div>
                                     <div id="vessels-list" class="vessels-list"></div>
+                                </div>
+
+                                <!-- Scale calibration entries -->
+                                <div id="scales-panel" class="vessels-panel" style="display: none;">
+                                    <div class="vessels-panel-header">
+                                        <span>📏 Scale calibrations (<span id="scales-count">0</span>)</span>
+                                        <span class="vessels-hint">Ratio is used to populate <code>px_per_cm</code> when you Extract Cards. Use "📍 Zone" for multi-scale pages.</span>
+                                    </div>
+                                    <div id="scales-list" class="vessels-list"></div>
                                 </div>
                             </div>
                         </div>

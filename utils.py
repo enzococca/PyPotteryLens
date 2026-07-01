@@ -516,17 +516,19 @@ class MaskExtractor:
         
         return cropped, (minc, minr, maxc, maxr)
 
-    def _save_metadata(self, 
-                      metadata: list[tuple], 
-                      annotations: list[tuple], 
-                      output_folder: Path) -> None:
+    def _save_metadata(self,
+                      metadata: list[tuple],
+                      annotations: list[tuple],
+                      output_folder: Path,
+                      px_per_cm_map: dict = None) -> None:
         """Save extraction metadata to CSV files"""
         if not metadata:
             return
-            
-        pd.DataFrame(metadata, columns=["file", "mask_file"]).to_csv(
-            output_folder / "mask_info.csv", index=False
-        )
+
+        df = pd.DataFrame(metadata, columns=["file", "mask_file"])
+        if px_per_cm_map:
+            df['px_per_cm'] = df['mask_file'].map(px_per_cm_map).fillna('')
+        df.to_csv(output_folder / "mask_info.csv", index=False)
         pd.DataFrame(annotations, columns=["bbox", "mask_file"]).to_csv(
             output_folder / "mask_info_annots.csv", index=False
         )
@@ -612,7 +614,8 @@ class MaskExtractor:
             
             metadata = []
             annotations = []
-            
+            px_per_cm_map = {}  # mask_file_stem → px_per_cm ratio
+
             total_files = len(mask_files)
             
             # Process each mask file
@@ -642,8 +645,9 @@ class MaskExtractor:
                 # which inflated the min-area cutoff 4x and dropped small vessels)
                 total_area = mask_array.shape[0] * mask_array.shape[1]
                 
-                # Manually drawn inner vessels for this image
+                # Manually drawn inner vessels and scale calibration for this image
                 drawn_polygons = read_vessels_sidecar(masks_path, base_filename)
+                scales = read_scale_sidecar(masks_path, base_filename)
 
                 # Process each region
                 next_index = 0
@@ -661,15 +665,20 @@ class MaskExtractor:
                     # original share resolution, which is the normal case.)
                     if mask_array.shape[:2] == orig_array.shape[:2]:
                         cropped = _whiteout_inner_polygons(cropped, bbox, region, drawn_polygons)
-                    output_filename = f"{base_filename}_mask_layer_{i}.png"
+                    mask_stem = f"{base_filename}_mask_layer_{i}"
+                    output_filename = f"{mask_stem}.png"
 
                     # Save cropped image with padding
                     cropped = np.pad(cropped, ((50, 50), (50, 50), (0, 0)), mode='constant', constant_values=255)
                     Image.fromarray(cropped).save(cards_path / output_filename)
 
-                    # Store metadata
-                    metadata.append((base_filename, f"{base_filename}_mask_layer_{i}"))
+                    # Store metadata + scale ratio
+                    metadata.append((base_filename, mask_stem))
                     annotations.append((bbox, output_filename))
+                    cx, cy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+                    ratio = _assign_px_per_cm(scales, (cx, cy))
+                    if ratio is not None:
+                        px_per_cm_map[mask_stem] = ratio
 
                 # Extract manually drawn vessels (e.g. vessels drawn inside other
                 # vessels). Connected-component labelling cannot separate these,
@@ -679,15 +688,20 @@ class MaskExtractor:
                     if result is None:
                         continue
                     cropped, bbox = result
-                    output_filename = f"{base_filename}_mask_layer_{next_index}.png"
+                    mask_stem = f"{base_filename}_mask_layer_{next_index}"
+                    output_filename = f"{mask_stem}.png"
                     cropped = np.pad(cropped, ((50, 50), (50, 50), (0, 0)), mode='constant', constant_values=255)
                     Image.fromarray(cropped).save(cards_path / output_filename)
-                    metadata.append((base_filename, f"{base_filename}_mask_layer_{next_index}"))
+                    metadata.append((base_filename, mask_stem))
                     annotations.append((bbox, output_filename))
+                    cx, cy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+                    ratio = _assign_px_per_cm(scales, (cx, cy))
+                    if ratio is not None:
+                        px_per_cm_map[mask_stem] = ratio
                     next_index += 1
 
             # Save metadata
-            self._save_metadata(metadata, annotations, cards_path)
+            self._save_metadata(metadata, annotations, cards_path, px_per_cm_map)
 
             if metadata:
                 return f"Successfully extracted {len(metadata)} cards from project masks"
@@ -1130,6 +1144,76 @@ def read_vessels_sidecar(masks_dir, base_filename: str) -> list:
     except Exception as e:
         print(f"Error reading vessels sidecar for {base_filename}: {e}")
         return []
+
+
+# ---------------------------------------------------------------------------
+# Scale calibration sidecars
+# Each image may have N scale-bar measurements stored alongside the mask.
+# Schema: {"image": base, "scales": [{"p1":[x,y], "p2":[x,y], "real_cm": 5.0,
+#           "zone": null | [x1,y1,x2,y2]}, ...]}
+# Coordinates are always in ORIGINAL image resolution.
+# At extraction time, each card centroid is matched to the nearest zone; if no
+# zone matches, the first scale without a zone acts as a global fallback.
+# ---------------------------------------------------------------------------
+
+SCALE_SIDECAR_SUFFIX = "_scale.json"
+
+
+def write_scale_sidecar(masks_dir, base_filename: str, scales: list) -> Path:
+    """Persist scale calibration entries for an image next to the mask as JSON."""
+    import json
+    masks_dir = Path(masks_dir)
+    sidecar = masks_dir / f"{base_filename}{SCALE_SIDECAR_SUFFIX}"
+    if scales:
+        with open(sidecar, "w") as f:
+            json.dump({"image": base_filename, "scales": scales}, f)
+    elif sidecar.exists():
+        sidecar.unlink()
+    return sidecar
+
+
+def read_scale_sidecar(masks_dir, base_filename: str) -> list:
+    """Load scale calibration entries for an image (empty list if none)."""
+    import json
+    sidecar = Path(masks_dir) / f"{base_filename}{SCALE_SIDECAR_SUFFIX}"
+    if not sidecar.exists():
+        return []
+    try:
+        with open(sidecar) as f:
+            return json.load(f).get("scales", [])
+    except Exception as e:
+        print(f"Error reading scale sidecar for {base_filename}: {e}")
+        return []
+
+
+def _assign_px_per_cm(scales: list, centroid: tuple):
+    """Return px_per_cm for the card whose bbox centroid is given.
+
+    Zoned scales (zone != None) take priority over the first global
+    (zone == None) fallback. Returns None if no scales are defined.
+    """
+    import math
+
+    def px_ratio(s):
+        dx = s['p2'][0] - s['p1'][0]
+        dy = s['p2'][1] - s['p1'][1]
+        dist_px = math.hypot(dx, dy)
+        real_cm = s.get('real_cm', 0)
+        return round(dist_px / real_cm, 4) if real_cm > 0 and dist_px > 0 else None
+
+    cx, cy = centroid
+    for s in scales:
+        z = s.get('zone')
+        if z:
+            x1, y1, x2, y2 = z
+            if min(x1, x2) <= cx <= max(x1, x2) and min(y1, y2) <= cy <= max(y1, y2):
+                r = px_ratio(s)
+                if r is not None:
+                    return r
+    for s in scales:
+        if not s.get('zone'):
+            return px_ratio(s)
+    return None
 
 
 def _whiteout_inner_polygons(cropped: np.ndarray, bbox, region, polygons: list):

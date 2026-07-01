@@ -41,6 +41,9 @@ from utils import (
     read_vessels_sidecar,
     write_vessels_sidecar,
     VESSELS_SIDECAR_SUFFIX,
+    read_scale_sidecar,
+    write_scale_sidecar,
+    SCALE_SIDECAR_SUFFIX,
 )
 
 from project_manager import ProjectManager
@@ -943,6 +946,35 @@ def get_project_vessels_summary(project_id):
                     summary[base] = count
         return jsonify({'success': True, 'summary': summary})
     except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/projects/<project_id>/scale/<base>', methods=['GET'])
+def get_image_scale(project_id, base):
+    """Return scale calibration entries for a single image."""
+    try:
+        masks_path = project_manager.get_project_path(project_id, 'masks')
+        if not masks_path:
+            return jsonify({'error': 'Project not found', 'success': False}), 404
+        return jsonify({'success': True, 'scales': read_scale_sidecar(masks_path, base)})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/api/projects/<project_id>/scale/<base>', methods=['POST'])
+def save_image_scale(project_id, base):
+    """Persist scale calibration entries for a single image."""
+    try:
+        masks_path = project_manager.get_project_path(project_id, 'masks')
+        if not masks_path or not masks_path.exists():
+            return jsonify({'error': 'Project masks folder not found', 'success': False}), 404
+        data = request.get_json(silent=True) or {}
+        scales = data.get('scales', [])
+        write_scale_sidecar(masks_path, base, scales)
+        return jsonify({'success': True, 'count': len(scales)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e), 'success': False}), 500
 
 
