@@ -26,6 +26,9 @@ from reportlab.pdfgen import canvas
 from PIL import Image
 import gc
 
+# DPI used to rasterize PDF pages to images. Kept as a single constant so the
+# value embedded in exported image metadata always matches the actual render.
+PDF_RENDER_DPI = 300
 
 
 @dataclass
@@ -94,7 +97,7 @@ class PDFProcessor:
                 page = doc[page_num]
                 
                 # Get the pixel map with a good resolution
-                pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                pix = page.get_pixmap(matrix=fitz.Matrix(PDF_RENDER_DPI/72, PDF_RENDER_DPI/72))
 
                 
                 # Convert to PIL Image
@@ -135,7 +138,7 @@ class PDFProcessor:
                 page = doc[page_num]
                 
                 # Get the pixel map with a good resolution
-                pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                pix = page.get_pixmap(matrix=fitz.Matrix(PDF_RENDER_DPI/72, PDF_RENDER_DPI/72))
                 
                 # Convert to PIL Image
                 img_data = pix.samples
@@ -615,6 +618,8 @@ class MaskExtractor:
             metadata = []
             annotations = []
             px_per_cm_map = {}  # mask_file_stem → px_per_cm ratio
+            seen_hashes = set()  # exact pixel-content hashes, to drop duplicate cards
+            duplicate_count = 0
 
             total_files = len(mask_files)
             
@@ -665,6 +670,15 @@ class MaskExtractor:
                     # original share resolution, which is the normal case.)
                     if mask_array.shape[:2] == orig_array.shape[:2]:
                         cropped = _whiteout_inner_polygons(cropped, bbox, region, drawn_polygons)
+
+                    # Skip cards that are pixel-identical to one already extracted
+                    # in this run (e.g. an overlapping/duplicated detection).
+                    content_hash = _content_hash(cropped)
+                    if content_hash in seen_hashes:
+                        duplicate_count += 1
+                        continue
+                    seen_hashes.add(content_hash)
+
                     mask_stem = f"{base_filename}_mask_layer_{i}"
                     output_filename = f"{mask_stem}.png"
 
@@ -688,6 +702,13 @@ class MaskExtractor:
                     if result is None:
                         continue
                     cropped, bbox = result
+
+                    content_hash = _content_hash(cropped)
+                    if content_hash in seen_hashes:
+                        duplicate_count += 1
+                        continue
+                    seen_hashes.add(content_hash)
+
                     mask_stem = f"{base_filename}_mask_layer_{next_index}"
                     output_filename = f"{mask_stem}.png"
                     cropped = np.pad(cropped, ((50, 50), (50, 50), (0, 0)), mode='constant', constant_values=255)
@@ -704,7 +725,11 @@ class MaskExtractor:
             self._save_metadata(metadata, annotations, cards_path, px_per_cm_map)
 
             if metadata:
-                return f"Successfully extracted {len(metadata)} cards from project masks"
+                msg = f"Successfully extracted {len(metadata)} cards from project masks"
+                if duplicate_count:
+                    plural = 's' if duplicate_count != 1 else ''
+                    msg += f" ({duplicate_count} exact duplicate{plural} skipped)"
+                return msg
             return "No cards were extracted. Check if masks are properly drawn."
 
         except Exception as e:
@@ -1247,6 +1272,12 @@ def _whiteout_inner_polygons(cropped: np.ndarray, bbox, region, polygons: list):
                          dtype=np.int32)
         cv2.fillPoly(out, [local], (255, 255, 255))
     return out
+
+
+def _content_hash(arr: np.ndarray) -> str:
+    """Exact pixel-content hash used to detect duplicate card extractions."""
+    import hashlib
+    return hashlib.md5(np.ascontiguousarray(arr).tobytes()).hexdigest()
 
 
 def extract_polygon_vessel(orig_array: np.ndarray, polygon: list):

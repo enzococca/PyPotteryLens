@@ -44,6 +44,7 @@ from utils import (
     read_scale_sidecar,
     write_scale_sidecar,
     SCALE_SIDECAR_SUFFIX,
+    PDF_RENDER_DPI,
 )
 
 from project_manager import ProjectManager
@@ -3357,10 +3358,11 @@ def export_project_results(project_id):
             # Get all card images sorted
             # Skip cards the operator excluded in Post Processing
             excluded_set = set(_read_excluded_cards(cards_modified_path)) if cards_modified_path else set()
-            card_images = sorted([f for f in export_folder.iterdir()
-                                  if f.suffix.lower() in ['.png', '.jpg', '.jpeg']
-                                  and f.name not in excluded_set])
-            print(f"Found {len(card_images)} card images to export ({len(excluded_set)} excluded)")
+            all_card_files = [f for f in export_folder.iterdir()
+                              if f.suffix.lower() in ['.png', '.jpg', '.jpeg']]
+            card_images = sorted([f for f in all_card_files if f.name not in excluded_set])
+            excluded_count = len(all_card_files) - len(card_images)
+            print(f"Found {len(card_images)} card images to export ({excluded_count} excluded)")
             
             # Prepare final metadata with new IDs
             final_metadata = []
@@ -3435,23 +3437,40 @@ def export_project_results(project_id):
             
             # Create ZIP
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                # Add images with new names
+                # Add images with new names, embedding the DPI the page was
+                # rasterized at so the file's own metadata carries it (PNG pHYs
+                # chunk / JPEG JFIF marker), not just the pixel dimensions.
+                import io
+                from PIL import Image
                 for idx, img_file in enumerate(card_images, 1):
                     new_name = f"{acronym}_{idx}{img_file.suffix}"
-                    zipf.write(img_file, new_name)
-                    print(f"Added {img_file.name} as {new_name}")
+                    with Image.open(img_file) as im:
+                        buf = io.BytesIO()
+                        save_kwargs = {'dpi': (PDF_RENDER_DPI, PDF_RENDER_DPI)}
+                        if img_file.suffix.lower() in ('.jpg', '.jpeg'):
+                            save_kwargs['format'] = 'JPEG'
+                        else:
+                            save_kwargs['format'] = 'PNG'
+                        im.save(buf, **save_kwargs)
+                        zipf.writestr(new_name, buf.getvalue())
+                    print(f"Added {img_file.name} as {new_name} ({PDF_RENDER_DPI} DPI)")
                 
                 # Add metadata
                 zipf.write(metadata_temp_path, f"{acronym}_metadata.csv")
                 print(f"Added metadata CSV")
         
-            # Send the ZIP file
-            return send_file(
+            # Send the ZIP file, with export counts exposed as headers so the
+            # frontend can report "exported vs excluded" after download.
+            response = send_file(
                 str(zip_path),
                 as_attachment=True,
                 download_name=f"{acronym}.zip",
                 mimetype='application/zip'
             )
+            response.headers['X-Export-Total'] = str(len(all_card_files))
+            response.headers['X-Export-Exported'] = str(len(card_images))
+            response.headers['X-Export-Excluded'] = str(excluded_count)
+            return response
             
         finally:
             # Cleanup will happen after send_file completes

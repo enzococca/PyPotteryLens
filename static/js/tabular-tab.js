@@ -45,6 +45,27 @@ function loadCurrentProject() {
 }
 
 function setupTabularListeners() {
+    // Sidebar toggle
+    const sidebar = document.getElementById('tabular-sidebar-panel');
+    const overlay = document.getElementById('tabular-sidebar-overlay');
+    
+    document.getElementById('tabular-toggle-sidebar')?.addEventListener('click', () => {
+        if (sidebar && overlay) {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+    });
+
+    const closeSidebar = () => {
+        if (sidebar && overlay) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        }
+    };
+
+    document.getElementById('tabular-close-sidebar')?.addEventListener('click', closeSidebar);
+    overlay?.addEventListener('click', closeSidebar);
+
     // Navigation
     document.getElementById('tabular-prev')?.addEventListener('click', () => navigateTabular(-1));
     document.getElementById('tabular-next')?.addEventListener('click', () => navigateTabular(1));
@@ -481,6 +502,12 @@ function showBboxEditor(rowIndex, label, clientX, clientY) {
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
 
+    // Add open animation
+    el.animate([
+        { opacity: 0, transform: 'scale(0.95) translateY(-5px)' },
+        { opacity: 1, transform: 'scale(1) translateY(0)' }
+    ], { duration: 250, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+
     // Close on outside click
     setTimeout(() => {
         document.addEventListener('click', _outsideEditorClick, true);
@@ -497,7 +524,15 @@ function _outsideEditorClick(e) {
 function closeBboxEditor() {
     document.removeEventListener('click', _outsideEditorClick, true);
     const el = document.getElementById('bbox-editor');
-    if (el) el.remove();
+    if (el) {
+        // Prevent clicking during closing animation
+        el.style.pointerEvents = 'none';
+        const anim = el.animate([
+            { opacity: 1, transform: 'scale(1) translateY(0)' },
+            { opacity: 0, transform: 'scale(0.95) translateY(-5px)' }
+        ], { duration: 150, easing: 'cubic-bezier(0.4, 0, 1, 1)' });
+        anim.onfinish = () => el.remove();
+    }
     // Clear table row highlight
     document.querySelectorAll('.data-table tr.bbox-highlighted').forEach(tr => {
         tr.classList.remove('bbox-highlighted');

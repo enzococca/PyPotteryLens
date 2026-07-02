@@ -313,6 +313,13 @@ async function handleExportConfirm() {
         window.PyPotteryUtils.hideLoading();
 
         if (response.ok) {
+            const exported = response.headers.get('X-Export-Exported');
+            const excluded = response.headers.get('X-Export-Excluded');
+            let summary = 'Export completed! ZIP downloaded.';
+            if (exported !== null && excluded !== null) {
+                summary = `Exported ${exported} card(s)` + (parseInt(excluded, 10) > 0 ? `, ${excluded} excluded.` : '.');
+            }
+
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -323,12 +330,12 @@ async function handleExportConfirm() {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
 
-            window.PyPotteryUtils.showStatus('export-dialog-status', 'Export completed! ZIP downloaded.', 'success');
-            window.PyPotteryUtils.showToast('Export completed successfully!', 'success');
+            window.PyPotteryUtils.showStatus('export-dialog-status', summary, 'success');
+            window.PyPotteryUtils.showToast(summary, 'success');
             setTimeout(() => {
                 hideExportDialog();
-                window.PyPotteryUtils.showStatus('postprocess-status', 'Export completed', 'success');
-            }, 2000);
+                window.PyPotteryUtils.showStatus('postprocess-status', summary, 'success');
+            }, 2500);
         } else {
             const errorData = await response.json();
             window.PyPotteryUtils.showStatus('export-dialog-status', errorData.error || 'Export failed', 'error');
